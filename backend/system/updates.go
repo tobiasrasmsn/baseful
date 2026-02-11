@@ -94,10 +94,8 @@ func RunUpdate() error {
 	currentStatus.UpdatingStatus = true
 	statusMutex.Unlock()
 
-	defer func() {
-		// Only clear it after the images are built and we are about to restart
-		// Or if we hit an error
-	}()
+	// 0. Ensure git safe directory
+	exec.Command("git", "config", "--global", "--add", "safe.directory", "/repo").Run()
 
 	// 1. Pull latest code
 	pullCmd := exec.Command("git", "-C", "/repo", "pull", "origin", "main")
@@ -109,9 +107,9 @@ func RunUpdate() error {
 	}
 
 	// 2. Build new images (background)
-	buildCmd := exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "build")
+	buildCmd := exec.Command("docker-compose", "-p", "baseful", "-f", "/repo/docker-compose.yml", "build")
 	if out, err := buildCmd.CombinedOutput(); err != nil {
-		buildCmd = exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "build")
+		buildCmd = exec.Command("docker", "compose", "-p", "baseful", "-f", "/repo/docker-compose.yml", "build")
 		if out, err := buildCmd.CombinedOutput(); err != nil {
 			statusMutex.Lock()
 			currentStatus.UpdatingStatus = false
@@ -129,14 +127,12 @@ func RunUpdate() error {
 	statusMutex.Unlock()
 
 	// 3. Swap to new version
-	// We run this in a separate goroutine and return immediately to the frontend
-	// as this container will be restarted and the connection will be cut.
 	go func() {
 		// Wait a second for the response to reach the frontend
 		time.Sleep(1 * time.Second)
-		upCmd := exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "up", "-d")
+		upCmd := exec.Command("docker-compose", "-p", "baseful", "-f", "/repo/docker-compose.yml", "up", "-d")
 		if out, err := upCmd.CombinedOutput(); err != nil {
-			upCmd = exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "up", "-d")
+			upCmd = exec.Command("docker", "compose", "-p", "baseful", "-f", "/repo/docker-compose.yml", "up", "-d")
 			upCmd.Run()
 			fmt.Printf("Docker up output: %s\n", string(out))
 		}
