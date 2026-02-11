@@ -1,0 +1,110 @@
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
+import { useParams } from "react-router-dom";
+
+interface Project {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+}
+
+interface ProjectContextType {
+  selectedProject: Project | null;
+  setSelectedProject: (project: Project | null) => void;
+  projects: Project[];
+  refreshProjects: () => Promise<void>;
+  createProject: (name: string, description: string) => Promise<Project | null>;
+}
+
+const ProjectContext = createContext<ProjectContextType | null>(null);
+
+export function useProject() {
+  const context = useContext(ProjectContext);
+  if (!context) {
+    throw new Error("useProject must be used within a ProjectProvider");
+  }
+  return context;
+}
+
+interface ProjectProviderProps {
+  children: ReactNode;
+}
+
+export function ProjectProvider({ children }: ProjectProviderProps) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const { id: urlProjectId } = useParams<{ id: string }>();
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch("/api/projects");
+      const data = await response.json();
+      setProjects(data);
+
+      // Sync selected project with URL
+      if (urlProjectId) {
+        const projectFromUrl = data.find(
+          (p: Project) => p.id === parseInt(urlProjectId),
+        );
+        if (projectFromUrl) {
+          setSelectedProject(projectFromUrl);
+        }
+      } else if (data.length > 0 && !selectedProject) {
+        setSelectedProject(data[0]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch projects:", error);
+    }
+  };
+
+  const createProject = async (
+    name: string,
+    description: string,
+  ): Promise<Project | null> => {
+    try {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, description }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to create project");
+      }
+
+      const newProject = await response.json();
+      await fetchProjects();
+      return newProject;
+    } catch (error) {
+      console.error("Error creating project:", error);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    fetchProjects();
+  }, [urlProjectId]);
+
+  return (
+    <ProjectContext.Provider
+      value={{
+        selectedProject,
+        setSelectedProject,
+        projects,
+        refreshProjects: fetchProjects,
+        createProject,
+      }}
+    >
+      {children}
+    </ProjectContext.Provider>
+  );
+}
