@@ -110,7 +110,16 @@ export default function DatabaseDetail() {
       const res = await fetch(`/api/databases/${id}/connection-string`);
       if (!res.ok) throw new Error("Failed to get connection string");
       const data = await res.json();
-      setConnectionString(data.connection_string);
+
+      let connString = data.connection_string;
+      if (connString) {
+        // If the backend returns 0.0.0.0 or localhost, replace it with the current domain/IP
+        // we are using to access the dashboard.
+        connString = connString.replace("@0.0.0.0:", `@${window.location.hostname}:`);
+        connString = connString.replace("@localhost:", `@${window.location.hostname}:`);
+      }
+
+      setConnectionString(connString);
       setConnectionWarning(data.warning);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "An error occurred");
@@ -383,7 +392,7 @@ export default function DatabaseDetail() {
               <div className="p-4">
                 <p className="text-2xl font-medium text-neutral-100 font-mono">
                   {metrics?.cpu_usage_percent !== undefined &&
-                  metrics?.cpu_usage_percent < 0.01
+                    metrics?.cpu_usage_percent < 0.01
                     ? metrics?.cpu_usage_percent.toFixed(4)
                     : (metrics?.cpu_usage_percent?.toFixed(1) ?? "0")}
                   %

@@ -40,7 +40,6 @@ services:
       - backend/.env
     environment:
       - PROXY_PORT=6432
-      - PROXY_HOST=0.0.0.0
       - DB_READ_ONLY=true
       - PROXY_ONLY=true
       - DB_PATH=/app/data/data.db
