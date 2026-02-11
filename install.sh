@@ -11,7 +11,7 @@ INSTALL_DIR="baseful"
 GITHUB_REPO="https://github.com/tobiasrasmsn/baseful.git"
 
 # --- Colors for output ---
-# Standard ANSI codes
+# Using actual escape characters for maximum compatibility
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -19,33 +19,27 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Helper for colored output - use format strings for safety
-info() {
-    printf "%b%s%b\n" "${BLUE}" "$1" "${NC}"
-}
-success() {
-    printf "%b%b%s%b\n" "${GREEN}" "${BOLD}" "$1" "${NC}"
-}
-warn() {
-    printf "%b%s%b\n" "${YELLOW}" "$1" "${NC}"
-}
-error() {
-    printf "%b%b%s%b\n" "${RED}" "${BOLD}" "$1" "${NC}"
-}
+# Helper for colored output
+info() { printf "%b%s%b\n" "${BLUE}" "$1" "${NC}"; }
+success() { printf "%b%b%s%b\n" "${GREEN}" "${BOLD}" "$1" "${NC}"; }
+warn() { printf "%b%s%b\n" "${YELLOW}" "$1" "${NC}"; }
+error() { printf "%b%b%s%b\n" "${RED}" "${BOLD}" "$1" "${NC}"; }
 
-# The Banner
-cat << EOF
-${BLUE}${BOLD}
+# Clear screen and show banner
+printf "\033[H\033[2J"
+printf "%b%b" "${BLUE}" "${BOLD}"
+cat << "EOF"
   ____                 _____       _ 
  |  _ \               |  ___|     | |
  | |_) | __ _ ___  ___| |_ _   _| |
- |  _ < / _\` / __|/ _ \  _| | | | |
+ |  _ < / _` / __|/ _ \  _| | | | |
  | |_) | (_| \__ \  __/ | | |_| | |
  |____/ \__,_|___/\___|_|  \__,_|_|
                                     
-   The Open Source Postgres Platform${NC}
-------------------------------------------------
+   The Open Source Postgres Platform
 EOF
+printf "%b" "${NC}"
+printf "%s\n" "------------------------------------------------"
 
 # 1. System Requirements Check
 info "[1/6] Checking system requirements..."
@@ -59,7 +53,7 @@ if ! command -v docker >/dev/null 2>&1; then
     fi
 fi
 
-# Check for Docker Compose (plugin or standalone)
+# Check for Docker Compose
 if docker compose version >/dev/null 2>&1; then
     DOCKER_COMPOSE_CMD="docker compose"
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -101,7 +95,7 @@ ENV_EXAMPLE="backend/.env.example"
 if [ ! -f "$ENV_FILE" ]; then
     cp "$ENV_EXAMPLE" "$ENV_FILE"
     
-    # Generate a secure random JWT secret (32+ chars)
+    # Generate a secure random JWT secret
     info "Generating secure JWT secret..."
     if command -v openssl >/dev/null 2>&1; then
         RAND_SECRET=$(openssl rand -hex 32)
@@ -116,7 +110,7 @@ if [ ! -f "$ENV_FILE" ]; then
         sed -i '' "s|^JWT_SECRET=.*|JWT_SECRET=$RAND_SECRET|" "$ENV_FILE"
     fi
     
-    # Automatically detect Public IP (prefer IPv4 for connection string compatibility)
+    # Automatically detect Public IP
     info "Detecting Public IP..."
     DETECTED_IP=$(curl -s -4 https://ifconfig.me || curl -s -4 https://api.ipify.org || curl -s https://ifconfig.me || echo "localhost")
     
@@ -127,7 +121,7 @@ if [ ! -f "$ENV_FILE" ]; then
         sed -i '' "s|^PUBLIC_IP=.*|PUBLIC_IP=$DETECTED_IP|" "$ENV_FILE"
     fi
     
-    success "✓ Configured .env with IP: $DETECTED_IP and generated JWT secret."
+    success "✓ Configured .env with IP: $DETECTED_IP"
 else
     warn "Existing .env file found. Skipping configuration."
 fi
@@ -156,13 +150,13 @@ PUBLIC_IP=$(grep "^PUBLIC_IP=" "$ENV_FILE" | cut -d'=' -f2)
 
 printf "\n"
 success "🚀 Baseful has been successfully installed!"
-printf "------------------------------------------------\n"
+printf "%s\n" "------------------------------------------------"
 printf "%bDashboard:%b    http://%s:3000\n" "${BOLD}" "${NC}" "${PUBLIC_IP}"
 printf "%bBackend API:%b  http://%s:8080\n" "${BOLD}" "${NC}" "${PUBLIC_IP}"
 printf "%bDatabase Proxy:%b %s:6432\n" "${BOLD}" "${NC}" "${PUBLIC_IP}"
-printf "------------------------------------------------\n"
+printf "%s\n" "------------------------------------------------"
 warn "\nNext Steps:"
-printf "1. Open the Dashboard in your browser.\n"
-printf "2. Start creating projects and databases.\n"
-printf "3. Connection strings will use your token and the proxy address above.\n"
+printf "%s\n" "1. Open the Dashboard in your browser."
+printf "%s\n" "2. Start creating projects and databases."
+printf "%s\n" "3. Connection strings will use your token and the proxy address above."
 printf "\nTo view logs, run: %bcd %s && %s logs -f%b\n\n" "${BOLD}" "${INSTALL_DIR}" "${DOCKER_COMPOSE_CMD}" "${NC}"
