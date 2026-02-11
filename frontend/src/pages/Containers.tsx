@@ -87,14 +87,6 @@ export default function Containers() {
         }
     }, [terminalOutput]);
 
-    const getStatusColor = (state: string) => {
-        switch (state.toLowerCase()) {
-            case "running": return "bg-green-500/10 text-green-500 border-green-500/20";
-            case "exited": return "bg-red-500/10 text-red-500 border-red-500/20";
-            case "created": return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-            default: return "bg-neutral-500/10 text-neutral-500 border-neutral-500/20";
-        }
-    };
     const renderTerminalDialogContent = () => (
         <DialogContent className="max-w-3xl h-[600px] flex flex-col p-0 gap-0 bg-[#0c0c0c] border-neutral-800 text-neutral-200 shadow-2xl overflow-hidden focus:outline-none">
             {/* Header - Styled like a window bar */}
@@ -226,7 +218,7 @@ export default function Containers() {
 
                                 {/* Quick Actions - Floating Top Right */}
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Dialog>
+                                    <Dialog onOpenChange={(open) => open && setSelectedContainer(container)}>
                                         <DialogTrigger asChild>
                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
                                                 <TerminalIcon size={14} />
