@@ -11,6 +11,7 @@ INSTALL_DIR="baseful"
 GITHUB_REPO="https://github.com/tobiasrasmsn/baseful.git"
 
 # --- Colors for output ---
+# Standard ANSI codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -18,15 +19,24 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Helper for colored output
-info() { printf "${BLUE}%b${NC}\n" "$1"; }
-success() { printf "${GREEN}%b${NC}\n" "$1"; }
-warn() { printf "${YELLOW}%b${NC}\n" "$1"; }
-error() { printf "${RED}%b${NC}\n" "$1"; }
+# Helper for colored output - use format strings for safety
+info() {
+    printf "%b%s%b\n" "${BLUE}" "$1" "${NC}"
+}
+success() {
+    printf "%b%b%s%b\n" "${GREEN}" "${BOLD}" "$1" "${NC}"
+}
+warn() {
+    printf "%b%s%b\n" "${YELLOW}" "$1" "${NC}"
+}
+error() {
+    printf "%b%b%s%b\n" "${RED}" "${BOLD}" "$1" "${NC}"
+}
 
-# Use cat for the banner - most stable across all systems
+# The Banner
 cat << EOF
-${BLUE}${BOLD}  ____                 _____       _ 
+${BLUE}${BOLD}
+  ____                 _____       _ 
  |  _ \               |  ___|     | |
  | |_) | __ _ ___  ___| |_ _   _| |
  |  _ < / _\` / __|/ _ \  _| | | | |
@@ -49,7 +59,7 @@ if ! command -v docker >/dev/null 2>&1; then
     fi
 fi
 
-# Check for Docker Compose V2 (docker compose) or V1 (docker-compose)
+# Check for Docker Compose (plugin or standalone)
 if docker compose version >/dev/null 2>&1; then
     DOCKER_COMPOSE_CMD="docker compose"
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -99,7 +109,7 @@ if [ ! -f "$ENV_FILE" ]; then
         RAND_SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)
     fi
     
-    # Use | as delimiter for sed to avoid issues with special characters
+    # Update JWT_SECRET
     if sed --version 2>/dev/null | grep -q "GNU"; then
         sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$RAND_SECRET|" "$ENV_FILE"
     else
@@ -110,7 +120,7 @@ if [ ! -f "$ENV_FILE" ]; then
     info "Detecting Public IP..."
     DETECTED_IP=$(curl -s https://ifconfig.me || curl -s https://api.ipify.org || echo "localhost")
     
-    # Update PUBLIC_IP in .env
+    # Update PUBLIC_IP
     if sed --version 2>/dev/null | grep -q "GNU"; then
         sed -i "s|^PUBLIC_IP=.*|PUBLIC_IP=$DETECTED_IP|" "$ENV_FILE"
     else
@@ -144,14 +154,15 @@ sleep 5
 
 PUBLIC_IP=$(grep "^PUBLIC_IP=" "$ENV_FILE" | cut -d'=' -f2)
 
-printf "\n${GREEN}${BOLD}🚀 Baseful has been successfully installed!${NC}\n"
-printf "%s\n" "------------------------------------------------"
-printf "${BOLD}Dashboard:${NC}    http://${PUBLIC_IP}:3000\n"
-printf "${BOLD}Backend API:${NC}  http://${PUBLIC_IP}:8080\n"
-printf "${BOLD}Database Proxy:${NC} ${PUBLIC_IP}:6432\n"
-printf "%s\n" "------------------------------------------------"
+printf "\n"
+success "🚀 Baseful has been successfully installed!"
+printf "------------------------------------------------\n"
+printf "%bDashboard:%b    http://%s:3000\n" "${BOLD}" "${NC}" "${PUBLIC_IP}"
+printf "%bBackend API:%b  http://%s:8080\n" "${BOLD}" "${NC}" "${PUBLIC_IP}"
+printf "%bDatabase Proxy:%b %s:6432\n" "${BOLD}" "${NC}" "${PUBLIC_IP}"
+printf "------------------------------------------------\n"
 warn "\nNext Steps:"
 printf "1. Open the Dashboard in your browser.\n"
 printf "2. Start creating projects and databases.\n"
 printf "3. Connection strings will use your token and the proxy address above.\n"
-printf "\nTo view logs, run: ${BOLD}cd $INSTALL_DIR && $DOCKER_COMPOSE_CMD logs -f${NC}\n\n"
+printf "\nTo view logs, run: %bcd %s && %s logs -f%b\n\n" "${BOLD}" "${INSTALL_DIR}" "${DOCKER_COMPOSE_CMD}" "${NC}"
