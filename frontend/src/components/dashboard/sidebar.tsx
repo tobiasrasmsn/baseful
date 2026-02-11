@@ -9,7 +9,6 @@ import {
   PlusIcon,
   TableIcon,
   TerminalIcon,
-  Sparkle,
   ArrowClockwise,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
