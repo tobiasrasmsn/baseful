@@ -19,7 +19,7 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Helper for colored output
-# Fixed: Always use a format string (%s) first. NEVER start a printf arg with a dash.
+# Always use format strings (%b %s) to prevent dash-handling issues
 info() { printf "%b%s%b\n" "${BLUE}" "$1" "${NC}"; }
 success() { printf "%b%b%s%b\n" "${GREEN}" "${BOLD}" "$1" "${NC}"; }
 warn() { printf "%b%s%b\n" "${YELLOW}" "$1" "${NC}"; }
