@@ -11,7 +11,6 @@ INSTALL_DIR="baseful"
 GITHUB_REPO="https://github.com/tobiasrasmsn/baseful.git"
 
 # --- Colors for output ---
-# Using printf with hex codes for maximum compatibility across all shells
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -20,7 +19,7 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Helper for colored output
-# Fixed: Always use %s to prevent dash-handling issues
+# Fixed: Always use a format string (%s) first. NEVER start a printf arg with a dash.
 info() { printf "%b%s%b\n" "${BLUE}" "$1" "${NC}"; }
 success() { printf "%b%b%s%b\n" "${GREEN}" "${BOLD}" "$1" "${NC}"; }
 warn() { printf "%b%s%b\n" "${YELLOW}" "$1" "${NC}"; }
