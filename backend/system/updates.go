@@ -106,20 +106,16 @@ func RunUpdate() error {
 		return fmt.Errorf("git pull failed: %v, output: %s", err, string(out))
 	}
 
-	// 2. Build new images (background)
-	buildCmd := exec.Command("docker-compose", "-p", "baseful", "-f", "/repo/docker-compose.yml", "build")
-	if out, err := buildCmd.CombinedOutput(); err != nil {
-		buildCmd = exec.Command("docker", "compose", "-p", "baseful", "-f", "/repo/docker-compose.yml", "build")
+	// 2. Build new images
+	buildCmd := exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "build")
+	if _, err := buildCmd.CombinedOutput(); err != nil {
+		buildCmd = exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "build")
 		if out, err := buildCmd.CombinedOutput(); err != nil {
 			statusMutex.Lock()
 			currentStatus.UpdatingStatus = false
 			statusMutex.Unlock()
 			return fmt.Errorf("docker build failed: %v, output: %s", err, string(out))
-		} else {
-			fmt.Printf("Docker build fallback output: %s\n", string(out))
 		}
-	} else {
-		fmt.Printf("Docker build output: %s\n", string(out))
 	}
 
 	statusMutex.Lock()
@@ -130,11 +126,10 @@ func RunUpdate() error {
 	go func() {
 		// Wait a second for the response to reach the frontend
 		time.Sleep(1 * time.Second)
-		upCmd := exec.Command("docker-compose", "-p", "baseful", "-f", "/repo/docker-compose.yml", "up", "-d")
-		if out, err := upCmd.CombinedOutput(); err != nil {
-			upCmd = exec.Command("docker", "compose", "-p", "baseful", "-f", "/repo/docker-compose.yml", "up", "-d")
+		upCmd := exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "up", "-d", "--remove-orphans")
+		if _, err := upCmd.CombinedOutput(); err != nil {
+			upCmd = exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "up", "-d", "--remove-orphans")
 			upCmd.Run()
-			fmt.Printf("Docker up output: %s\n", string(out))
 		}
 	}()
 
