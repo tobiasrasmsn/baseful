@@ -11,7 +11,7 @@ INSTALL_DIR="baseful"
 GITHUB_REPO="https://github.com/tobiasrasmsn/baseful.git"
 
 # --- Colors for output ---
-# Using printf because echo -e is not portable across all shells (like dash on Ubuntu)
+# Using printf because echo is not portable across all shells (like dash on Ubuntu)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -20,38 +20,39 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Helper for colored output
-info() { printf "${BLUE}%b${NC}\n" "$1"; }
-success() { printf "${GREEN}%b${NC}\n" "$1"; }
-warn() { printf "${YELLOW}%b${NC}\n" "$1"; }
-error() { printf "${RED}%b${NC}\n" "$1"; }
+# Using -- to ensure the format string isn't interpreted as an option
+info() { printf -- "${BLUE}%b${NC}\n" "$1"; }
+success() { printf -- "${GREEN}%b${NC}\n" "$1"; }
+warn() { printf -- "${YELLOW}%b${NC}\n" "$1"; }
+error() { printf -- "${RED}%b${NC}\n" "$1"; }
 
-printf "${BLUE}${BOLD}"
-printf "%s" "  ____                 _____       _ \n"
-printf "%s" " |  _ \               |  ___|     | |\n"
-printf "%s" " | |_) | __ _ ___  ___| |_ _   _| |\n"
-printf "%s" " |  _ < / _\` / __|/ _ \  _| | | | |\n"
-printf "%s" " | |_) | (_| \__ \  __/ | | |_| | |\n"
-printf "%s" " |____/ \__,_|___/\___|_|  \__,_|_|\n"
-printf "%s" "                                    \n"
-printf "   The Open Source Postgres Platform${NC}\n"
-printf "%s" "------------------------------------------------\n"
+printf -- "${BLUE}${BOLD}%s${NC}" ""
+printf -- "%s\n" "  ____                 _____       _ "
+printf -- "%s\n" " |  _ \               |  ___|     | |"
+printf -- "%s\n" " | |_) | __ _ ___  ___| |_ _   _| |"
+printf -- "%s\n" " |  _ < / _\` / __|/ _ \  _| | | | |"
+printf -- "%s\n" " | |_) | (_| \__ \  __/ | | |_| | |"
+printf -- "%s\n" " |____/ \__,_|___/\___|_|  \__,_|_|"
+printf -- "%s\n" "                                    "
+printf -- "${BLUE}%s${NC}\n" "   The Open Source Postgres Platform"
+printf -- "%s\n" "------------------------------------------------"
 
 # 1. System Requirements Check
 info "[1/6] Checking system requirements..."
 
 # Check if Docker is installed
-if ! command -v docker &> /dev/null; then
+if ! command -v docker >/dev/null 2>&1; then
     warn "Docker not found. Installing Docker..."
     curl -fsSL https://get.docker.com | sh
-    if command -v systemctl &> /dev/null; then
+    if command -v systemctl >/dev/null 2>&1; then
         sudo systemctl enable --now docker
     fi
 fi
 
 # Check for Docker Compose V2 (docker compose) or V1 (docker-compose)
-if docker compose version &> /dev/null; then
+if docker compose version >/dev/null 2>&1; then
     DOCKER_COMPOSE_CMD="docker compose"
-elif command -v docker-compose &> /dev/null; then
+elif command -v docker-compose >/dev/null 2>&1; then
     DOCKER_COMPOSE_CMD="docker-compose"
 else
     error "Error: Docker Compose is required but not found."
@@ -59,11 +60,11 @@ else
     exit 1
 fi
 
-if ! command -v git &> /dev/null; then
+if ! command -v git >/dev/null 2>&1; then
     warn "Git not found. Installing git..."
-    if command -v apt-get &> /dev/null; then
+    if command -v apt-get >/dev/null 2>&1; then
         sudo apt-get update && sudo apt-get install -y git
-    elif command -v yum &> /dev/null; then
+    elif command -v yum >/dev/null 2>&1; then
         sudo yum install -y git
     fi
 fi
@@ -92,7 +93,7 @@ if [ ! -f "$ENV_FILE" ]; then
     
     # Generate a secure random JWT secret (32+ chars)
     info "Generating secure JWT secret..."
-    if command -v openssl &> /dev/null; then
+    if command -v openssl >/dev/null 2>&1; then
         RAND_SECRET=$(openssl rand -hex 32)
     else
         RAND_SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)
@@ -117,7 +118,7 @@ if [ ! -f "$ENV_FILE" ]; then
         sed -i '' "s|^PUBLIC_IP=.*|PUBLIC_IP=$DETECTED_IP|" "$ENV_FILE"
     fi
     
-    success "✓ Configured .env with IP: ${BOLD}$DETECTED_IP${NC}${GREEN} and generated JWT secret."
+    success "✓ Configured .env with IP: $DETECTED_IP and generated JWT secret."
 else
     warn "Existing .env file found. Skipping configuration."
 fi
@@ -144,14 +145,14 @@ sleep 5
 
 PUBLIC_IP=$(grep "^PUBLIC_IP=" "$ENV_FILE" | cut -d'=' -f2)
 
-printf "\n${GREEN}${BOLD}🚀 Baseful has been successfully installed!${NC}\n"
-printf "------------------------------------------------\n"
-printf "${BOLD}Dashboard:${NC}    http://${PUBLIC_IP}:3000\n"
-printf "${BOLD}Backend API:${NC}  http://${PUBLIC_IP}:8080\n"
-printf "${BOLD}Database Proxy:${NC} ${PUBLIC_IP}:6432\n"
-printf "------------------------------------------------\n"
+printf -- "\n${GREEN}${BOLD}%s${NC}\n" "🚀 Baseful has been successfully installed!"
+printf -- "%s\n" "------------------------------------------------"
+printf -- "${BOLD}%s${NC}    http://${PUBLIC_IP}:3000\n" "Dashboard:"
+printf -- "${BOLD}%s${NC}  http://${PUBLIC_IP}:8080\n" "Backend API:"
+printf -- "${BOLD}%s${NC} %s:6432\n" "Database Proxy:" "${PUBLIC_IP}"
+printf -- "%s\n" "------------------------------------------------"
 warn "\nNext Steps:"
-printf "1. Open the Dashboard in your browser.\n"
-printf "2. Start creating projects and databases.\n"
-printf "3. Connection strings will use your token and the proxy address above.\n"
-printf "\nTo view logs, run: ${BOLD}cd $INSTALL_DIR && $DOCKER_COMPOSE_CMD logs -f${NC}\n\n"
+printf -- "%s\n" "1. Open the Dashboard in your browser."
+printf -- "%s\n" "2. Start creating projects and databases."
+printf -- "%s\n" "3. Connection strings will use your token and the proxy address above."
+printf -- "\nTo view logs, run: ${BOLD}cd $INSTALL_DIR && $DOCKER_COMPOSE_CMD logs -f${NC}\n\n"
