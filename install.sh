@@ -20,14 +20,15 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Helper for colored output
-info() { printf "${BLUE}%s${NC}\n" "$1"; }
-success() { printf "${GREEN}${BOLD}%s${NC}\n" "$1"; }
-warn() { printf "${YELLOW}%s${NC}\n" "$1"; }
-error() { printf "${RED}${BOLD}%s${NC}\n" "$1"; }
+# Fixed: Always use %s to prevent dash-handling issues
+info() { printf "%b%s%b\n" "${BLUE}" "$1" "${NC}"; }
+success() { printf "%b%b%s%b\n" "${GREEN}" "${BOLD}" "$1" "${NC}"; }
+warn() { printf "%b%s%b\n" "${YELLOW}" "$1" "${NC}"; }
+error() { printf "%b%b%s%b\n" "${RED}" "${BOLD}" "$1" "${NC}"; }
 
 # Clear screen and show banner
 printf "\033[H\033[2J"
-printf "${BLUE}${BOLD}"
+printf "%b%b" "${BLUE}" "${BOLD}"
 cat << "EOF"
   ____                 _____       _ 
  |  _ \               |  ___|     | |
@@ -38,8 +39,8 @@ cat << "EOF"
                                     
    The Open Source Postgres Platform
 EOF
-printf "${NC}"
-printf "------------------------------------------------\n"
+printf "%b" "${NC}"
+printf "%s\n" "------------------------------------------------"
 
 # 0. Check if we are already in a baseful directory to prevent nesting
 if [ -f "docker-compose.yml" ] && grep -q "baseful-backend" "docker-compose.yml"; then
