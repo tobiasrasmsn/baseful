@@ -105,6 +105,14 @@ func main() {
 		c.JSON(200, system.GetUpdateStatus())
 	})
 
+	r.POST("/api/system/update", func(c *gin.Context) {
+		if err := system.RunUpdate(); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"message": "Update initiated successfully. The system will restart in a few moments."})
+	})
+
 	// ========== PROJECTS API ==========
 
 	// Get all projects

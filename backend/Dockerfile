@@ -17,7 +17,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 FROM alpine:latest
 
 # Install dependencies
-RUN apk --no-cache add ca-certificates docker-cli git
+RUN apk --no-cache add ca-certificates docker-cli docker-compose git
 
 WORKDIR /app
 

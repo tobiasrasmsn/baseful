@@ -87,3 +87,40 @@ func GetUpdateStatus() UpdateStatus {
 	defer statusMutex.RUnlock()
 	return currentStatus
 }
+
+func RunUpdate() error {
+	// 1. Pull latest code
+	pullCmd := exec.Command("git", "-C", "/repo", "pull", "origin", "main")
+	if out, err := pullCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git pull failed: %v, output: %s", err, string(out))
+	}
+
+	// 2. Build new images (background)
+	buildCmd := exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "build")
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		buildCmd = exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "build")
+		if out, err := buildCmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("docker build failed: %v, output: %s", err, string(out))
+		} else {
+			fmt.Printf("Docker build fallback output: %s\n", string(out))
+		}
+	} else {
+		fmt.Printf("Docker build output: %s\n", string(out))
+	}
+
+	// 3. Swap to new version
+	// We run this in a separate goroutine and return immediately to the frontend
+	// as this container will be restarted and the connection will be cut.
+	go func() {
+		// Wait a second for the response to reach the frontend
+		time.Sleep(1 * time.Second)
+		upCmd := exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "up", "-d")
+		if out, err := upCmd.CombinedOutput(); err != nil {
+			upCmd = exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "up", "-d")
+			upCmd.Run()
+			fmt.Printf("Docker up output: %s\n", string(out))
+		}
+	}()
+
+	return nil
+}
