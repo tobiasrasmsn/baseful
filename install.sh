@@ -26,15 +26,15 @@ warn() { printf "${YELLOW}%b${NC}\n" "$1"; }
 error() { printf "${RED}%b${NC}\n" "$1"; }
 
 printf "${BLUE}${BOLD}"
-printf "  ____                 _____       _ \n"
-printf " |  _ \               |  ___|     | |\n"
-printf " | |_) | __ _ ___  ___| |_ _   _| |\n"
-printf " |  _ < / _\` / __|/ _ \  _| | | | |\n"
-printf " | |_) | (_| \__ \  __/ | | |_| | |\n"
-printf " |____/ \__,_|___/\___|_|  \__,_|_|\n"
-printf "                                    \n"
+printf "%s" "  ____                 _____       _ \n"
+printf "%s" " |  _ \               |  ___|     | |\n"
+printf "%s" " | |_) | __ _ ___  ___| |_ _   _| |\n"
+printf "%s" " |  _ < / _\` / __|/ _ \  _| | | | |\n"
+printf "%s" " | |_) | (_| \__ \  __/ | | |_| | |\n"
+printf "%s" " |____/ \__,_|___/\___|_|  \__,_|_|\n"
+printf "%s" "                                    \n"
 printf "   The Open Source Postgres Platform${NC}\n"
-printf "------------------------------------------------\n"
+printf "%s" "------------------------------------------------\n"
 
 # 1. System Requirements Check
 info "[1/6] Checking system requirements..."
