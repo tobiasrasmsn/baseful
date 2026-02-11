@@ -98,8 +98,31 @@ export default function Sidebar() {
     return text;
   };
 
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleUpdate = async () => {
+    if (
+      !confirm(
+        "Are you sure you want to update? The system will restart and the dashboard will be unavailable for a few seconds.",
+      )
+    )
+      return;
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch("/api/system/update", { method: "POST" });
+      if (!res.ok) throw new Error("Update failed");
+      alert(
+        "Update initiated! The system is rebuilding in the background. Please refresh this page in about 30 seconds.",
+      );
+    } catch (e) {
+      alert("Failed to start update. Check backend logs.");
+      setIsUpdating(false);
+    }
+  };
+
   return (
-    <div className="w-72 p-2">
+    <div className="w-72 p-2 flex flex-col h-full">
       <div className="mb-6 flex flex-row items-center justify-between">
         {/* Combined Project/Database Selector */}
         <Popover open={selectorOpen} onOpenChange={setSelectorOpen}>
@@ -436,14 +459,11 @@ export default function Sidebar() {
 
       {/* Update Status Banner */}
       <div className="mt-auto pt-4">
-        {updateStatus?.available && (
+        {!updateStatus?.available && (
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 group animate-in fade-in slide-in-from-bottom-2 duration-500">
             <div className="flex items-center gap-2 mb-2">
-              <div className="bg-blue-500 rounded-full p-1 group-hover:animate-pulse">
-                <Sparkle size={12} weight="fill" className="text-white" />
-              </div>
-              <span className="text-xs font-semibold text-blue-400">
-                New Version Available
+              <span className="text-sm font-medium text-blue-400">
+                New Version Available!
               </span>
             </div>
             <p className="text-[11px] text-neutral-400 mb-3 leading-relaxed">
@@ -451,21 +471,16 @@ export default function Sidebar() {
               version.
             </p>
             <button
-              onClick={() => {
-                // Future Implementation: Trigger update
-                alert(
-                  "Safely triggering: git pull && docker compose up -d --build",
-                );
-              }}
-              className="w-full h-8 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 transition-all rounded-md text-xs font-medium text-white shadow-lg active:scale-95"
+              onClick={handleUpdate}
+              disabled={isUpdating}
+              className="w-full h-8 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all rounded-md text-xs font-medium text-white shadow-lg active:scale-95"
             >
-              <ArrowClockwise size={14} weight="bold" />
-              Update Now
+              {isUpdating ? "Updating..." : "Update Now"}
             </button>
           </div>
         )}
 
-        <div className="mt-4 px-2.5 flex items-center justify-between text-[10px] text-neutral-500">
+        <div className="px-2.5 flex items-center justify-between text-[10px] text-neutral-500">
           <span>v1.0.0</span>
           <span className="opacity-50">
             {updateStatus?.currentHash?.slice(0, 7) || "dev"}
