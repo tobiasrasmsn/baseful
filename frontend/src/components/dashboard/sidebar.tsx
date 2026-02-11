@@ -31,11 +31,13 @@ export default function Sidebar() {
   const location = useLocation();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<{
     available: boolean;
     currentHash: string;
     remoteHash: string;
     checkingStatus: boolean;
+    updatingStatus: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -50,10 +52,35 @@ export default function Sidebar() {
     };
 
     checkUpdates();
-    // Check every 10 minutes from the frontend too
     const interval = setInterval(checkUpdates, 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+
+    // If we are currently updating, poll much faster
+    let pollInterval: any;
+    if (updateStatus?.updatingStatus || isUpdating) {
+      pollInterval = setInterval(async () => {
+        try {
+          const res = await fetch("/api/system/update-status");
+          const data = await res.json();
+
+          // If the hash changed, the update finished and system restarted!
+          if (data.currentHash !== updateStatus?.currentHash && updateStatus?.currentHash) {
+            window.location.reload();
+          }
+
+          setUpdateStatus(data);
+          if (!data.updatingStatus) setIsUpdating(false);
+        } catch (e) {
+          // If fetch fails, the system might be restarting
+          console.log("System unreachable, likely restarting...");
+        }
+      }, 2000);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [updateStatus?.updatingStatus, isUpdating, updateStatus?.currentHash]);
 
   useEffect(() => {
     const pathParts = location.pathname.split("/");
@@ -98,7 +125,6 @@ export default function Sidebar() {
     return text;
   };
 
-  const [isUpdating, setIsUpdating] = useState(false);
 
   const handleUpdate = async () => {
     if (
@@ -112,9 +138,7 @@ export default function Sidebar() {
     try {
       const res = await fetch("/api/system/update", { method: "POST" });
       if (!res.ok) throw new Error("Update failed");
-      alert(
-        "Update initiated! The system is rebuilding in the background. Please refresh this page in about 30 seconds.",
-      );
+      // No alert needed, the UI will show the updating state
     } catch (e) {
       alert("Failed to start update. Check backend logs.");
       setIsUpdating(false);

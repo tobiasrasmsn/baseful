@@ -14,6 +14,7 @@ type UpdateStatus struct {
 	RemoteHash     string    `json:"remoteHash"`
 	LastChecked    time.Time `json:"lastChecked"`
 	CheckingStatus bool      `json:"checkingStatus"`
+	UpdatingStatus bool      `json:"updatingStatus"`
 }
 
 var (
@@ -89,9 +90,21 @@ func GetUpdateStatus() UpdateStatus {
 }
 
 func RunUpdate() error {
+	statusMutex.Lock()
+	currentStatus.UpdatingStatus = true
+	statusMutex.Unlock()
+
+	defer func() {
+		// Only clear it after the images are built and we are about to restart
+		// Or if we hit an error
+	}()
+
 	// 1. Pull latest code
 	pullCmd := exec.Command("git", "-C", "/repo", "pull", "origin", "main")
 	if out, err := pullCmd.CombinedOutput(); err != nil {
+		statusMutex.Lock()
+		currentStatus.UpdatingStatus = false
+		statusMutex.Unlock()
 		return fmt.Errorf("git pull failed: %v, output: %s", err, string(out))
 	}
 
@@ -100,6 +113,9 @@ func RunUpdate() error {
 	if out, err := buildCmd.CombinedOutput(); err != nil {
 		buildCmd = exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "build")
 		if out, err := buildCmd.CombinedOutput(); err != nil {
+			statusMutex.Lock()
+			currentStatus.UpdatingStatus = false
+			statusMutex.Unlock()
 			return fmt.Errorf("docker build failed: %v, output: %s", err, string(out))
 		} else {
 			fmt.Printf("Docker build fallback output: %s\n", string(out))
@@ -107,6 +123,10 @@ func RunUpdate() error {
 	} else {
 		fmt.Printf("Docker build output: %s\n", string(out))
 	}
+
+	statusMutex.Lock()
+	currentStatus.UpdatingStatus = false
+	statusMutex.Unlock()
 
 	// 3. Swap to new version
 	// We run this in a separate goroutine and return immediately to the frontend
