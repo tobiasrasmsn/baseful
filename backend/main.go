@@ -28,6 +28,7 @@ import (
 	"baseful/db"
 	"baseful/docker"
 	"baseful/proxy"
+	"baseful/system"
 )
 
 func getFreePort() (int, error) {
@@ -91,10 +92,17 @@ func main() {
 		}
 	}()
 
+	fmt.Println("Initializing Update Sentinel...")
+	system.InitUpdateChecker()
+
 	r := gin.Default()
 
 	r.GET("/api/hello", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Baseful API is running"})
+	})
+
+	r.GET("/api/system/update-status", func(c *gin.Context) {
+		c.JSON(200, system.GetUpdateStatus())
 	})
 
 	// ========== PROJECTS API ==========

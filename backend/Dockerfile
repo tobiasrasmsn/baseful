@@ -16,8 +16,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 # Runtime stage
 FROM alpine:latest
 
-# Install ca-certificates and docker client (needed if backend manages other containers)
-RUN apk --no-cache add ca-certificates docker-cli
+# Install dependencies
+RUN apk --no-cache add ca-certificates docker-cli git
 
 WORKDIR /app
 

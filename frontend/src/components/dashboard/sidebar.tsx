@@ -9,6 +9,8 @@ import {
   PlusIcon,
   TableIcon,
   TerminalIcon,
+  Sparkle,
+  ArrowClockwise,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -30,6 +32,28 @@ export default function Sidebar() {
   const location = useLocation();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<{
+    available: boolean;
+    currentHash: string;
+    remoteHash: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const checkUpdates = async () => {
+      try {
+        const res = await fetch("/api/system/update-status");
+        const data = await res.json();
+        setUpdateStatus(data);
+      } catch (e) {
+        console.error("Failed to check for updates");
+      }
+    };
+
+    checkUpdates();
+    // Check every 10 minutes from the frontend too
+    const interval = setInterval(checkUpdates, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const pathParts = location.pathname.split("/");
@@ -409,6 +433,45 @@ export default function Sidebar() {
           </div>
         )}
       </nav>
+
+      {/* Update Status Banner */}
+      <div className="mt-auto pt-4">
+        {updateStatus?.available && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 group animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-blue-500 rounded-full p-1 group-hover:animate-pulse">
+                <Sparkle size={12} weight="fill" className="text-white" />
+              </div>
+              <span className="text-xs font-semibold text-blue-400">
+                New Version Available
+              </span>
+            </div>
+            <p className="text-[11px] text-neutral-400 mb-3 leading-relaxed">
+              New features and improvements are ready. Update to the latest
+              version.
+            </p>
+            <button
+              onClick={() => {
+                // Future Implementation: Trigger update
+                alert(
+                  "Safely triggering: git pull && docker compose up -d --build",
+                );
+              }}
+              className="w-full h-8 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 transition-all rounded-md text-xs font-medium text-white shadow-lg active:scale-95"
+            >
+              <ArrowClockwise size={14} weight="bold" />
+              Update Now
+            </button>
+          </div>
+        )}
+
+        <div className="mt-4 px-2.5 flex items-center justify-between text-[10px] text-neutral-500">
+          <span>v1.0.0</span>
+          <span className="opacity-50">
+            {updateStatus?.currentHash?.slice(0, 7) || "dev"}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
