@@ -116,9 +116,9 @@ if [ ! -f "$ENV_FILE" ]; then
         sed -i '' "s|^JWT_SECRET=.*|JWT_SECRET=$RAND_SECRET|" "$ENV_FILE"
     fi
     
-    # Automatically detect Public IP
+    # Automatically detect Public IP (prefer IPv4 for connection string compatibility)
     info "Detecting Public IP..."
-    DETECTED_IP=$(curl -s https://ifconfig.me || curl -s https://api.ipify.org || echo "localhost")
+    DETECTED_IP=$(curl -s -4 https://ifconfig.me || curl -s -4 https://api.ipify.org || curl -s https://ifconfig.me || echo "localhost")
     
     # Update PUBLIC_IP
     if sed --version 2>/dev/null | grep -q "GNU"; then
