@@ -45,18 +45,19 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
     try {
       const response = await fetch("/api/projects");
       const data = await response.json();
-      setProjects(data);
+      setProjects(data || []);
 
       // Sync selected project with URL
+      const projectsList = data || [];
       if (urlProjectId) {
-        const projectFromUrl = data.find(
+        const projectFromUrl = projectsList.find(
           (p: Project) => p.id === parseInt(urlProjectId),
         );
         if (projectFromUrl) {
           setSelectedProject(projectFromUrl);
         }
-      } else if (data.length > 0 && !selectedProject) {
-        setSelectedProject(data[0]);
+      } else if (projectsList.length > 0 && !selectedProject) {
+        setSelectedProject(projectsList[0]);
       }
     } catch (error) {
       console.error("Failed to fetch projects:", error);

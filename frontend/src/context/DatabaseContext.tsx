@@ -49,18 +49,19 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     try {
       const response = await fetch("/api/databases");
       const data = await response.json();
-      setDatabases(data);
+      setDatabases(data || []);
 
       // Sync selected database with URL
+      const databasesList = data || [];
       if (urlDbId) {
-        const dbFromUrl = data.find(
+        const dbFromUrl = databasesList.find(
           (db: Database) => db.id === parseInt(urlDbId),
         );
         if (dbFromUrl) {
           setSelectedDatabase(dbFromUrl);
         }
-      } else if (data.length > 0 && !selectedDatabase) {
-        setSelectedDatabase(data[0]);
+      } else if (databasesList.length > 0 && !selectedDatabase) {
+        setSelectedDatabase(databasesList[0]);
       }
     } catch (error) {
       console.error("Failed to fetch databases:", error);

@@ -93,6 +93,10 @@ func main() {
 
 	r := gin.Default()
 
+	r.GET("/api/hello", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "Baseful API is running"})
+	})
+
 	// ========== PROJECTS API ==========
 
 	// Get all projects
@@ -104,7 +108,7 @@ func main() {
 		}
 		defer rows.Close()
 
-		var projects []map[string]interface{}
+		projects := []map[string]interface{}{}
 		for rows.Next() {
 			var id int
 			var name, description, createdAt string
@@ -191,7 +195,7 @@ func main() {
 		}
 		defer rows.Close()
 
-		var databases []map[string]interface{}
+		databases := []map[string]interface{}{}
 		for rows.Next() {
 			var dbID, port int
 			var name, dbType, host, status string
@@ -224,7 +228,7 @@ func main() {
 		}
 		defer rows.Close()
 
-		var databases []map[string]interface{}
+		databases := []map[string]interface{}{}
 		for rows.Next() {
 			var id, port, projectID int
 			var name, dbType, host, status string
