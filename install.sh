@@ -11,7 +11,7 @@ INSTALL_DIR="baseful"
 GITHUB_REPO="https://github.com/tobiasrasmsn/baseful.git"
 
 # --- Colors for output ---
-# Using actual escape characters for maximum compatibility
+# Using printf with hex codes for maximum compatibility across all shells
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -20,14 +20,14 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Helper for colored output
-info() { printf "%b%s%b\n" "${BLUE}" "$1" "${NC}"; }
-success() { printf "%b%b%s%b\n" "${GREEN}" "${BOLD}" "$1" "${NC}"; }
-warn() { printf "%b%s%b\n" "${YELLOW}" "$1" "${NC}"; }
-error() { printf "%b%b%s%b\n" "${RED}" "${BOLD}" "$1" "${NC}"; }
+info() { printf "${BLUE}%s${NC}\n" "$1"; }
+success() { printf "${GREEN}${BOLD}%s${NC}\n" "$1"; }
+warn() { printf "${YELLOW}%s${NC}\n" "$1"; }
+error() { printf "${RED}${BOLD}%s${NC}\n" "$1"; }
 
 # Clear screen and show banner
 printf "\033[H\033[2J"
-printf "%b%b" "${BLUE}" "${BOLD}"
+printf "${BLUE}${BOLD}"
 cat << "EOF"
   ____                 _____       _ 
  |  _ \               |  ___|     | |
@@ -38,8 +38,25 @@ cat << "EOF"
                                     
    The Open Source Postgres Platform
 EOF
-printf "%b" "${NC}"
-printf "%s\n" "------------------------------------------------"
+printf "${NC}"
+printf "------------------------------------------------\n"
+
+# 0. Check if we are already in a baseful directory to prevent nesting
+if [ -f "docker-compose.yml" ] && grep -q "baseful-backend" "docker-compose.yml"; then
+    info "Detected existing Baseful directory. Skipping clone..."
+    INSTALL_DIR="."
+else
+    # 2. Clone Repository
+    info "[2/6] Cloning Baseful repository..."
+    if [ -d "$INSTALL_DIR" ]; then
+        warn "Warning: Directory $INSTALL_DIR already exists. Updating..."
+        cd "$INSTALL_DIR"
+        git pull
+    else
+        git clone "$GITHUB_REPO" "$INSTALL_DIR"
+        cd "$INSTALL_DIR"
+    fi
+fi
 
 # 1. System Requirements Check
 info "[1/6] Checking system requirements..."
@@ -74,17 +91,6 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 success "✓ Dependencies are ready."
-
-# 2. Clone Repository
-info "[2/6] Cloning Baseful repository..."
-if [ -d "$INSTALL_DIR" ]; then
-    warn "Warning: Directory $INSTALL_DIR already exists. Updating..."
-    cd "$INSTALL_DIR"
-    git pull
-else
-    git clone "$GITHUB_REPO" "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
-fi
 
 # 3. Environment Configuration
 info "[3/6] Configuring environment..."

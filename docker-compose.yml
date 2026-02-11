@@ -6,7 +6,9 @@ services:
     container_name: baseful-backend
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./backend/data.db:/app/data.db
+      - ./backend-data:/app/data
+    environment:
+      - DB_PATH=/app/data/data.db
     env_file:
       - backend/.env
     ports:
@@ -42,7 +44,7 @@ services:
       - PROXY_ONLY=true
       - DB_PATH=/app/data/data.db
     volumes:
-      - ./backend:/app/data:ro
+      - ./backend-data:/app/data:ro
     ports:
       - "6432:6432"
     networks:
