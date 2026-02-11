@@ -3,11 +3,12 @@ package docker
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 type ContainerInfo struct {
@@ -74,40 +75,78 @@ func ListContainers() ([]ContainerInfo, error) {
 	return result, nil
 }
 
-// ExecCommand executes a command in a container and returns the output
-func ExecCommand(containerID string, cmd []string) (string, error) {
-	ctx := context.Background()
+// ExecResult contains the output and the new current working directory
+type ExecResult struct {
+	Output string `json:"output"`
+	Cwd    string `json:"cwd"`
+}
+
+// ExecCommand executes a command, returns output and the NEW current working directory
+func ExecCommand(containerID string, rawCommand string, currentCwd string) (ExecResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return "", fmt.Errorf("failed to create docker client: %w", err)
+		return ExecResult{}, fmt.Errorf("failed to create docker client: %w", err)
 	}
 	defer cli.Close()
 
-	// Create exec
+	// Append ;pwd to the command to get the new directory after execution
+	// We use a separator to easily parse it later
+	separator := "___BASEFUL_PWD_SEP___"
+	wrappedCommand := fmt.Sprintf("%s; echo -n %s; pwd", rawCommand, separator)
+
+	// Smart command transformation for 'top' (stays in batch mode)
+	if strings.HasPrefix(rawCommand, "top") && !strings.Contains(rawCommand, "-b") {
+		wrappedCommand = fmt.Sprintf("top -b -n 1; echo -n %s; pwd", separator)
+	}
+
 	execConfig := container.ExecOptions{
-		Cmd:          cmd,
+		Cmd:          []string{"/bin/sh", "-c", wrappedCommand},
 		AttachStdout: true,
 		AttachStderr: true,
+		WorkingDir:   currentCwd,
 		Tty:          false,
 	}
 
 	execID, err := cli.ContainerExecCreate(ctx, containerID, execConfig)
 	if err != nil {
-		return "", fmt.Errorf("failed to create exec: %w", err)
+		return ExecResult{}, fmt.Errorf("failed to create exec: %w", err)
 	}
 
-	// Start exec
 	resp, err := cli.ContainerExecAttach(ctx, execID.ID, container.ExecStartOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to attach exec: %w", err)
+		return ExecResult{}, fmt.Errorf("failed to attach exec: %w", err)
 	}
 	defer resp.Close()
 
-	// Read output
-	output, err := io.ReadAll(resp.Reader)
-	if err != nil {
-		return "", fmt.Errorf("failed to read output: %w", err)
+	var outBuf, errBuf strings.Builder
+	done := make(chan error, 1)
+	go func() {
+		_, copyErr := stdcopy.StdCopy(&outBuf, &errBuf, resp.Reader)
+		done <- copyErr
+	}()
+
+	var finalStdout, finalStderr string
+	select {
+	case <-ctx.Done():
+		finalStdout = outBuf.String()
+		finalStderr = errBuf.String() + "\n[Command timed out]"
+	case <-done:
+		finalStdout = outBuf.String()
+		finalStderr = errBuf.String()
 	}
 
-	return string(output), nil
+	// Parse out the new CWD from STDOUT ONLY
+	// This prevents stderr (errors) from corrupting the path
+	parts := strings.Split(finalStdout, separator)
+	if len(parts) > 1 {
+		cleanOutput := strings.Join(parts[:len(parts)-1], "")
+		newCwd := strings.TrimSpace(parts[len(parts)-1])
+		// Combine result: command's clean stdout + stderr
+		return ExecResult{Output: cleanOutput + finalStderr, Cwd: newCwd}, nil
+	}
+
+	return ExecResult{Output: finalStdout + finalStderr, Cwd: currentCwd}, nil
 }

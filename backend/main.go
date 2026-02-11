@@ -1659,25 +1659,26 @@ func main() {
 	r.POST("/api/docker/containers/:id/exec", func(c *gin.Context) {
 		id := c.Param("id")
 		var req struct {
-			Command []string `json:"command"`
+			Command string `json:"command"`
+			Cwd     string `json:"cwd"`
 		}
 		if err := c.BindJSON(&req); err != nil {
 			c.JSON(400, gin.H{"error": "Invalid request"})
 			return
 		}
 
-		if len(req.Command) == 0 {
+		if req.Command == "" {
 			c.JSON(400, gin.H{"error": "Command is required"})
 			return
 		}
 
-		output, err := docker.ExecCommand(id, req.Command)
+		result, err := docker.ExecCommand(id, req.Command, req.Cwd)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to execute command: " + err.Error()})
 			return
 		}
 
-		c.JSON(200, gin.H{"output": output})
+		c.JSON(200, result)
 	})
 
 	// ========== DOCKER NETWORK STATUS ==========
