@@ -105,6 +105,11 @@ func main() {
 		c.JSON(200, system.GetUpdateStatus())
 	})
 
+	r.POST("/api/system/update-check", func(c *gin.Context) {
+		system.CheckForUpdates()
+		c.JSON(200, system.GetUpdateStatus())
+	})
+
 	r.POST("/api/system/update", func(c *gin.Context) {
 		if err := system.RunUpdate(); err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})

@@ -36,6 +36,7 @@ export default function Sidebar() {
     available: boolean;
     currentHash: string;
     remoteHash: string;
+    checkingStatus: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -118,6 +119,16 @@ export default function Sidebar() {
     } catch (e) {
       alert("Failed to start update. Check backend logs.");
       setIsUpdating(false);
+    }
+  };
+
+  const handleManualCheck = async () => {
+    try {
+      const res = await fetch("/api/system/update-check", { method: "POST" });
+      const data = await res.json();
+      setUpdateStatus(data);
+    } catch (e) {
+      console.error("Manual check failed");
     }
   };
 
@@ -459,7 +470,7 @@ export default function Sidebar() {
 
       {/* Update Status Banner */}
       <div className="mt-auto pt-4">
-        {!updateStatus?.available && (
+        {updateStatus?.available && (
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 group animate-in fade-in slide-in-from-bottom-2 duration-500">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-sm font-medium text-blue-400">
@@ -481,7 +492,20 @@ export default function Sidebar() {
         )}
 
         <div className="px-2.5 flex items-center justify-between text-[10px] text-neutral-500">
-          <span>v1.0.0</span>
+          <div className="flex items-center gap-2">
+            <span>v1.0.0</span>
+            <button
+              onClick={handleManualCheck}
+              disabled={updateStatus?.checkingStatus}
+              className="hover:text-blue-400 transition-colors disabled:opacity-50"
+              title="Check for updates"
+            >
+              <ArrowClockwise
+                size={10}
+                className={updateStatus?.checkingStatus ? "animate-spin" : ""}
+              />
+            </button>
+          </div>
           <span className="opacity-50">
             {updateStatus?.currentHash?.slice(0, 7) || "dev"}
           </span>
