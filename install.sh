@@ -16,18 +16,18 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Helper for colored output
-# Always use format strings (%b %s) to prevent dash-handling issues
-info() { printf "%b%s%b\n" "${BLUE}" "$1" "${NC}"; }
-success() { printf "%b%b%s%b\n" "${GREEN}" "${BOLD}" "$1" "${NC}"; }
-warn() { printf "%b%s%b\n" "${YELLOW}" "$1" "${NC}"; }
-error() { printf "%b%b%s%b\n" "${RED}" "${BOLD}" "$1" "${NC}"; }
+# Fixed: Guaranteed to never trigger "invalid option" by using fixed format strings
+info() { printf "%b%s%b\n" "$BLUE" "$1" "$NC"; }
+success() { printf "%b%b%s%b\n" "$GREEN" "$BOLD" "$1" "$NC"; }
+warn() { printf "%b%s%b\n" "$YELLOW" "$1" "$NC"; }
+error() { printf "%b%b%s%b\n" "$RED" "$BOLD" "$1" "$NC"; }
 
 # Clear screen and show banner
 printf "\033[H\033[2J"
-printf "%b%b" "${BLUE}" "${BOLD}"
+printf "%b%b" "$BLUE" "$BOLD"
 cat << "EOF"
   ____                 _____       _ 
  |  _ \               |  ___|     | |
@@ -35,13 +35,15 @@ cat << "EOF"
  |  _ < / _` / __|/ _ \  _| | | | |
  | |_) | (_| \__ \  __/ | | |_| | |
  |____/ \__,_|___/\___|_|  \__,_|_|
-                                    
+
    The Open Source Postgres Platform
 EOF
-printf "%b" "${NC}"
-printf "%s\n" "------------------------------------------------"
+printf "%b" "$NC"
+cat << "EOF"
+------------------------------------------------
+EOF
 
-# 0. Check if we are already in a baseful directory to prevent nesting
+# 0. Check if we are already in a baseful directory
 if [ -f "docker-compose.yml" ] && grep -q "baseful-backend" "docker-compose.yml"; then
     info "Detected existing Baseful directory. Skipping clone..."
     INSTALL_DIR="."
@@ -154,15 +156,19 @@ sleep 5
 
 PUBLIC_IP=$(grep "^PUBLIC_IP=" "$ENV_FILE" | cut -d'=' -f2)
 
-printf "\n"
-success "🚀 Baseful has been successfully installed!"
-printf "%s\n" "------------------------------------------------"
-printf "%bDashboard:%b    http://%s:3000\n" "${BOLD}" "${NC}" "${PUBLIC_IP}"
-printf "%bBackend API:%b  http://%s:8080\n" "${BOLD}" "${NC}" "${PUBLIC_IP}"
-printf "%bDatabase Proxy:%b %s:6432\n" "${BOLD}" "${NC}" "${PUBLIC_IP}"
-printf "%s\n" "------------------------------------------------"
+printf "\n\033[1;32m🚀 Baseful has been successfully installed!\033[0m\n"
+cat << "EOF"
+------------------------------------------------
+EOF
+printf "\033[1mDashboard:\033[0m    http://%s:3000\n" "$PUBLIC_IP"
+printf "\033[1mBackend API:\033[0m  http://%s:8080\n" "$PUBLIC_IP"
+printf "\033[1mDatabase Proxy:\033[0m %s:6432\n" "$PUBLIC_IP"
+cat << "EOF"
+------------------------------------------------
+EOF
 warn "\nNext Steps:"
-printf "%s\n" "1. Open the Dashboard in your browser."
-printf "%s\n" "2. Start creating projects and databases."
-printf "%s\n" "3. Connection strings will use your token and the proxy address above."
-printf "\nTo view logs, run: %bcd %s && %s logs -f%b\n\n" "${BOLD}" "${INSTALL_DIR}" "${DOCKER_COMPOSE_CMD}" "${NC}"
+printf "1. Open the Dashboard in your browser.\n"
+printf "2. Start creating projects and databases.\n"
+printf "3. Connection strings will use your token and the proxy address above.\n\n"
+info "To view logs, run: cd $INSTALL_DIR && $DOCKER_COMPOSE_CMD logs -f"
+printf "\n"
