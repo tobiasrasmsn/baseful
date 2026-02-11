@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"baseful/auth"
+	"baseful/db"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -11,9 +13,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"baseful/auth"
-	"baseful/db"
 )
 
 const (
