@@ -156,6 +156,7 @@ export default function Sidebar() {
                   "bg-green-500",
                 ]}
                 size={22}
+                enableBlink={true}
               />
               <div className="flex flex-col">
                 <h2 className="text-sm font-medium">
