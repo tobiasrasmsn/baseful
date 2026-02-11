@@ -47,27 +47,31 @@ func CheckForUpdates() {
 	}()
 
 	// 1. Git fetch
-	fetchCmd := exec.Command("git", "fetch", "origin", "main")
+	fetchCmd := exec.Command("git", "-C", "/repo", "fetch", "origin", "main")
 	if err := fetchCmd.Run(); err != nil {
 		fmt.Printf("Update check failed (fetch): %v\n", err)
-		return
+		// Try without -C just in case we are running locally
+		fetchLocal := exec.Command("git", "fetch", "origin", "main")
+		fetchLocal.Run()
 	}
 
 	// 2. Get current hash
-	currentCmd := exec.Command("git", "rev-parse", "HEAD")
+	currentCmd := exec.Command("git", "-C", "/repo", "rev-parse", "HEAD")
 	currentOut, err := currentCmd.Output()
 	if err != nil {
-		fmt.Printf("Update check failed (rev-parse HEAD): %v\n", err)
-		return
+		// Fallback to local
+		currentLocal := exec.Command("git", "rev-parse", "HEAD")
+		currentOut, _ = currentLocal.Output()
 	}
 	currentHash := strings.TrimSpace(string(currentOut))
 
 	// 3. Get remote hash
-	remoteCmd := exec.Command("git", "rev-parse", "origin/main")
+	remoteCmd := exec.Command("git", "-C", "/repo", "rev-parse", "origin/main")
 	remoteOut, err := remoteCmd.Output()
 	if err != nil {
-		fmt.Printf("Update check failed (rev-parse origin/main): %v\n", err)
-		return
+		// Fallback to local
+		remoteLocal := exec.Command("git", "rev-parse", "origin/main")
+		remoteOut, _ = remoteLocal.Output()
 	}
 	remoteHash := strings.TrimSpace(string(remoteOut))
 

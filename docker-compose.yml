@@ -7,7 +7,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backend-data:/app/data
-      - .:/app:ro
+      - .:/repo
     environment:
       - DB_PATH=/app/data/data.db
     env_file:
