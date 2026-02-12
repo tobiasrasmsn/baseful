@@ -61,25 +61,29 @@ func ProvisionSSL(domain string) error {
 	// Get ports
 	backendPort := 8080
 	dashboardPort := 3000
-	_ = 6432 // proxyPort placeholder
+
+	// When running in Docker, we can use the service names defined in docker-compose.
+	// 'baseful-frontend' is the container name for the frontend.
+	// 'localhost' works for the backend since Caddy is in the same container.
+	frontendHost := "baseful-frontend"
+	backendHost := "localhost"
 
 	caddyfileContent := fmt.Sprintf(`{
     email admin@%s
+    admin 0.0.0.0:2019
 }
 
 %s {
-    # Dashboard
-    reverse_proxy localhost:%d
-
     # Backend API
     handle /api/* {
-        reverse_proxy localhost:%d
+        reverse_proxy %s:%d
     }
 
-    # Proxy (if it's HTTP based, otherwise Caddy needs layer4 for TCP)
-    # For now we assume the user wants to access the dashboard and API
+    # Dashboard / Frontend
+    # The frontend container listens on port 80 internally
+    reverse_proxy %s:80
 }
-`, domain, domain, dashboardPort, backendPort)
+`, domain, domain, backendHost, backendPort, frontendHost)
 
 	// If the user wants TCP proxying for the database proxy,
 	// they would need the Caddy layer4 module which is not standard.
@@ -98,14 +102,20 @@ func ProvisionSSL(domain string) error {
 	}
 
 	// Reload or start caddy
-	cmd := exec.Command("caddy", "reload", "--config", caddyfilePath)
-	err = cmd.Run()
+	// We use --adapter caddyfile to ensure it knows how to read the config
+	fmt.Printf("Attempting to reload Caddy with domain: %s\n", domain)
+
+	cmd := exec.Command("caddy", "reload", "--config", caddyfilePath, "--adapter", "caddyfile")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
+		fmt.Printf("Caddy reload failed: %s\nOutput: %s\n", err, string(output))
+
 		// If reload fails, try starting it
-		cmd = exec.Command("caddy", "start", "--config", caddyfilePath)
-		err = cmd.Run()
+		cmd = exec.Command("caddy", "start", "--config", caddyfilePath, "--adapter", "caddyfile")
+		output, err = cmd.CombinedOutput()
 		if err != nil {
-			return err
+			fmt.Printf("Caddy start failed: %s\nOutput: %s\n", err, string(output))
+			return fmt.Errorf("caddy failed: %s (output: %s)", err, string(output))
 		}
 	}
 

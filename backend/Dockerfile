@@ -17,15 +17,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 FROM alpine:latest
 
 # Install dependencies
-RUN apk --no-cache add ca-certificates docker-cli docker-compose git
+RUN apk --no-cache add ca-certificates docker-cli docker-compose git caddy
 
 WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/main /app/main
 
-# Expose API port
-EXPOSE 8080
+# Expose API port, HTTP, and HTTPS
+EXPOSE 8080 80 443
 
 # Run the application
 CMD ["/app/main"]
