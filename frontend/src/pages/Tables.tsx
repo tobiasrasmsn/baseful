@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import {
-  TableIcon,
-} from "@phosphor-icons/react";
+import { TableIcon } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
 import { Facehash } from "facehash";
 
@@ -230,16 +228,6 @@ export default function Tables() {
         <div className="flex-1 flex items-center justify-center bg-card border border-border rounded-lg">
           <p className="text-red-400">{error}</p>
         </div>
-      ) : !tables || tables.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center bg-card border border-border rounded-lg">
-          <div className="text-center">
-            <TableIcon size={48} className="text-neutral-600 mx-auto mb-4" />
-            <p className="text-neutral-400">No tables found in this database</p>
-            <p className="text-sm text-neutral-500 mt-2">
-              Create a table using the SQL Editor to get started
-            </p>
-          </div>
-        </div>
       ) : (
         <div className="flex-1 flex min-h-0">
           {/* Tables sidebar */}
@@ -249,7 +237,7 @@ export default function Tables() {
                 <button
                   key={i}
                   onClick={() => fetchTableData(table.name)}
-                  className={`w-full rounded-md flex flex-row items-center justify-between text-left px-4 py-3  hover:bg-neutral-800/50 transition-colors ${
+                  className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${
                     selectedTableName === table.name ? "bg-muted/75" : ""
                   }`}
                 >
@@ -272,9 +260,6 @@ export default function Tables() {
                       {table.name}
                     </span>
                   </div>
-                  <div className="flex flex-row items-center gap-1 mt-1 ml-6 text-neutral-500">
-                    <span className="text-xs">{table.row_count} rows</span>
-                  </div>
                 </button>
               ))}
             </div>
@@ -289,10 +274,6 @@ export default function Tables() {
             ) : !selectedTable ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <TableIcon
-                    size={48}
-                    className="text-neutral-600 mx-auto mb-4"
-                  />
                   <p className="text-neutral-400">
                     Select a table to view its contents
                   </p>
@@ -334,8 +315,6 @@ export default function Tables() {
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                  {/* Schema */}
-
                   {/* Data */}
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     {!selectedTable.rows || selectedTable.rows.length === 0 ? (

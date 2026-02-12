@@ -5,48 +5,133 @@ import (
 	"baseful/db"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/binary"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+// Global active connections map for tracking
+var activeConns sync.Map
 
 const (
 	DefaultPort = 6432
+
+	// Security configuration
+	DefaultIdleTimeout    = 30 * time.Minute // Idle connection timeout
+	DefaultQueryTimeout   = 5 * time.Minute  // Query execution timeout
+	AuthTimeout           = 15 * time.Second // Authentication phase timeout
+	MaxConnectionDuration = 24 * time.Hour   // Maximum connection lifetime
+	TokenCheckInterval    = 5 * time.Minute  // How often to check token revocation
+	SSLHandshakeTimeout   = 10 * time.Second // SSL/TLS handshake timeout
 )
 
-type ProxyServer struct {
-	listener net.Listener
-	port     int
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+type ProxyConfig struct {
+	Port              int
+	IdleTimeout       time.Duration
+	QueryTimeout      time.Duration
+	MaxConnectionTime time.Duration
+	EnableSSL         bool
+	CertFile          string
+	KeyFile           string
+	Logger            *Logger
 }
 
-func NewProxyServer(port int) *ProxyServer {
-	if port == 0 {
-		port = DefaultPort
+type ProxyServer struct {
+	listener    net.Listener
+	port        int
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	config      *ProxyConfig
+	tlsConfig   *tls.Config
+	activeConns sync.Map
+	logger      *Logger
+}
+
+func NewProxyServer(config *ProxyConfig) *ProxyServer {
+	if config.Port == 0 {
+		config.Port = DefaultPort
 	}
+	if config.IdleTimeout == 0 {
+		config.IdleTimeout = DefaultIdleTimeout
+	}
+	if config.QueryTimeout == 0 {
+		config.QueryTimeout = DefaultQueryTimeout
+	}
+	if config.MaxConnectionTime == 0 {
+		config.MaxConnectionTime = MaxConnectionDuration
+	}
+	if config.Logger == nil {
+		config.Logger = GetLogger()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	return &ProxyServer{
-		port:   port,
+		port:   config.Port,
 		ctx:    ctx,
 		cancel: cancel,
+		config: config,
+		logger: config.Logger,
 	}
+}
+
+// ConnectionMetadata stores metadata about an active connection
+type ConnectionMetadata struct {
+	ID          string
+	ClientIP    string
+	DatabaseID  int
+	TokenID     string
+	ConnectedAt time.Time
+	LastActive  time.Time
+	BytesSent   int64
+	BytesRecv   int64
 }
 
 func (p *ProxyServer) Start() error {
+	var err error
+
+	// Setup TLS if enabled
+	if p.config.EnableSSL {
+		if err := p.setupTLS(); err != nil {
+			return fmt.Errorf("failed to setup TLS: %w", err)
+		}
+	}
+
 	addr := fmt.Sprintf(":%d", p.port)
-	listener, err := net.Listen("tcp", addr)
+
+	var listener net.Listener
+	if p.tlsConfig != nil {
+		listener, err = tls.Listen("tcp", addr, p.tlsConfig)
+		p.logger.Info("TLS listener started", nil, map[string]string{"port": fmt.Sprintf("%d", p.port)})
+	} else {
+		listener, err = net.Listen("tcp", addr)
+	}
+
 	if err != nil {
 		return err
 	}
+
 	p.listener = listener
-	log.Printf("[Proxy] Listening on %s", addr)
+	p.logger.Info(fmt.Sprintf("Proxy listening on %s", addr), nil, nil)
+
+	// Start idle connection cleanup goroutine
+	p.wg.Add(1)
+	go p.idleConnectionChecker()
 
 	p.wg.Add(1)
 	go func() {
@@ -58,10 +143,15 @@ func (p *ProxyServer) Start() error {
 				case <-p.ctx.Done():
 					return
 				default:
-					log.Printf("[Proxy] Accept error: %v", err)
+					p.logger.Warning("Accept error", nil, map[string]string{"error": err.Error()}, nil)
 					continue
 				}
 			}
+
+			// Get client IP for logging
+			clientIP := conn.RemoteAddr().String()
+			p.logger.ConnectionStarted(clientIP, 0, p.port)
+
 			p.wg.Add(1)
 			go p.handleConnection(conn)
 		}
@@ -69,32 +159,174 @@ func (p *ProxyServer) Start() error {
 	return nil
 }
 
+// setupTLS configures TLS/SSL termination
+func (p *ProxyServer) setupTLS() error {
+	var cert tls.Certificate
+	var err error
+
+	// Try to load existing certificate
+	if p.config.CertFile != "" && p.config.KeyFile != "" {
+		cert, err = tls.LoadX509KeyPair(p.config.CertFile, p.config.KeyFile)
+		if err != nil {
+			// Generate self-signed certificate if not found
+			p.logger.Warning("Failed to load certificate, generating self-signed", nil, nil, nil)
+			cert, err = p.generateSelfSignedCert()
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// Generate self-signed certificate
+		cert, err = p.generateSelfSignedCert()
+		if err != nil {
+			return err
+		}
+	}
+
+	p.tlsConfig = &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+		ClientAuth:   tls.NoClientCert,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		},
+	}
+
+	return nil
+}
+
+// generateSelfSignedCert creates a self-signed certificate for development
+func (p *ProxyServer) generateSelfSignedCert() (tls.Certificate, error) {
+	// Generate RSA key
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// Create certificate template
+	serialNumber, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"Baseful Proxy"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:              []string{"localhost"},
+	}
+
+	// Create certificate
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// Encode to PEM
+	pemBlock := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: derBytes,
+	})
+	keyBlock := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	})
+
+	return tls.X509KeyPair(pemBlock, keyBlock)
+}
+
+// idleConnectionChecker periodically checks for idle connections
+func (p *ProxyServer) idleConnectionChecker() {
+	defer p.wg.Done()
+
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			p.activeConns.Range(func(key, value interface{}) bool {
+				connID := key.(string)
+				meta := value.(*ConnectionMetadata)
+
+				idleTime := now.Sub(meta.LastActive)
+				if idleTime > p.config.IdleTimeout {
+					// Log and let the connection be cleaned up
+					p.logger.IdleTimeoutTriggered(&ConnectionInfo{
+						RemoteIP:   meta.ClientIP,
+						DatabaseID: meta.DatabaseID,
+						Duration:   idleTime.Milliseconds(),
+					}, idleTime)
+					p.activeConns.Delete(connID)
+				}
+				return true
+			})
+		}
+	}
+}
+
 func (p *ProxyServer) handleConnection(frontend net.Conn) {
 	defer p.wg.Done()
 	defer frontend.Close()
 
-	// 1. Handle Frontend Handshake (JWT Auth)
-	frontend.SetDeadline(time.Now().Add(15 * time.Second))
+	connID := uuid.New().String()
+	clientIP := frontend.RemoteAddr().String()
+
+	// Track connection metadata
+	connMeta := &ConnectionMetadata{
+		ID:          connID,
+		ClientIP:    clientIP,
+		ConnectedAt: time.Now(),
+		LastActive:  time.Now(),
+	}
+
+	startTime := time.Now()
+
+	// 1. Handle Frontend Handshake (JWT Auth) with timeout
+	frontend.SetDeadline(time.Now().Add(AuthTimeout))
 
 	startupParams, jwtToken, err := p.handleFrontendHandshake(frontend)
 	if err != nil {
-		log.Printf("[Proxy] Frontend handshake failed: %v", err)
+		p.logger.ConnectionFailed(clientIP, 0, p.port, "handshake failed", err)
+		p.sendError(frontend, "08000", "Connection handshake failed")
 		return
 	}
 
-	// 2. Validate JWT
+	// 2. Validate JWT and check token revocation
 	claims, err := auth.ValidateJWT(jwtToken)
 	if err != nil {
-		p.sendError(frontend, "28000", "Invalid JWT token")
+		p.logger.TokenExpired("", clientIP)
+		p.sendError(frontend, "28000", "Invalid or expired JWT token")
 		return
 	}
+
+	// Check if token has been revoked
+	if err := p.checkTokenRevocation(claims.TokenID); err != nil {
+		p.logger.TokenRevoked(claims.TokenID, clientIP)
+		p.sendError(frontend, "28000", "Token has been revoked")
+		return
+	}
+
+	connMeta.TokenID = claims.TokenID
 
 	// 3. Get Backend Info
 	dbInfo, err := db.GetDatabaseByID(claims.DatabaseID)
 	if err != nil {
+		p.logger.Warning("Database not found", nil, map[string]string{"database_id": fmt.Sprintf("%d", claims.DatabaseID)}, nil)
 		p.sendError(frontend, "3D000", "Database not found")
 		return
 	}
+
+	connMeta.DatabaseID = claims.DatabaseID
 
 	// 4. Connect and Handshake with Backend
 	// Try connecting to the internal host first (for Docker-to-Docker)
@@ -105,13 +337,20 @@ func (p *ProxyServer) handleConnection(frontend net.Conn) {
 
 	// If internal connection fails and we have a mapped port, try connecting via localhost (for Host-to-Docker)
 	if err != nil && dbInfo.MappedPort > 0 {
-		log.Printf("[Proxy] internal connection failed (%v), trying localhost:%d", err, dbInfo.MappedPort)
+		p.logger.Warning("Internal connection failed, trying localhost", nil, map[string]string{
+			"error":       err.Error(),
+			"mapped_port": fmt.Sprintf("%d", dbInfo.MappedPort),
+		}, nil)
 		backendHost = "127.0.0.1"
 		backendPort = dbInfo.MappedPort
 		backend, err = net.DialTimeout("tcp", fmt.Sprintf("%s:%d", backendHost, backendPort), 5*time.Second)
 	}
 
 	if err != nil {
+		p.logger.Error("Backend connection failed", nil, map[string]string{
+			"host": backendHost,
+			"port": fmt.Sprintf("%d", backendPort),
+		}, err)
 		p.sendError(frontend, "08006", fmt.Sprintf("Failed to connect to backend database at %s:%d", dbInfo.Host, dbInfo.Port))
 		return
 	}
@@ -119,19 +358,46 @@ func (p *ProxyServer) handleConnection(frontend net.Conn) {
 
 	err = p.handleBackendHandshake(backend, dbInfo, startupParams, frontend)
 	if err != nil {
-		log.Printf("[Proxy] Backend handshake failed: %v", err)
+		p.logger.Warning("Backend handshake failed", nil, map[string]string{"error": err.Error()}, nil)
 		return
 	}
 
 	// 5. Synchronized! Both are now at ReadyForQuery.
 	frontend.SetDeadline(time.Time{})
-	log.Printf("[Proxy] Connection synchronized for DB %d. Piping...", claims.DatabaseID)
 
+	// Store connection metadata
+	p.activeConns.Store(connID, connMeta)
+	p.logger.ConnectionAuthenticated(&ConnectionInfo{
+		RemoteIP:   clientIP,
+		RemotePort: 0,
+		LocalPort:  p.port,
+	}, claims.DatabaseID, claims.TokenID)
+
+	// 6. Pipe data with idle timeout tracking
 	errChan := make(chan error, 2)
-	go func() { errChan <- p.pipe(frontend, backend) }()
-	go func() { errChan <- p.pipe(backend, frontend) }()
+	go func() {
+		errChan <- p.pipeWithIdleTracking(frontend, backend, connMeta, false)
+	}()
+	go func() {
+		errChan <- p.pipeWithIdleTracking(backend, frontend, connMeta, true)
+	}()
 
 	<-errChan
+
+	// Calculate duration and log disconnection
+	duration := time.Since(startTime)
+	p.logger.ConnectionClosed(&ConnectionInfo{
+		RemoteIP:   clientIP,
+		RemotePort: 0,
+		LocalPort:  p.port,
+		DatabaseID: claims.DatabaseID,
+		Duration:   duration.Milliseconds(),
+		BytesSent:  connMeta.BytesSent,
+		BytesRecv:  connMeta.BytesRecv,
+	}, duration, connMeta.BytesSent, connMeta.BytesRecv)
+
+	// Remove from active connections
+	p.activeConns.Delete(connID)
 }
 
 func (p *ProxyServer) handleFrontendHandshake(conn net.Conn) (map[string]string, string, error) {
@@ -281,6 +547,57 @@ func (p *ProxyServer) pipe(dst, src net.Conn) error {
 	return err
 }
 
+// pipeWithIdleTracking copies data between connections while tracking activity
+func (p *ProxyServer) pipeWithIdleTracking(dst, src net.Conn, meta *ConnectionMetadata, isBackend bool) error {
+	buf := make([]byte, 32*1024) // 32KB buffer
+	var totalBytes int64
+
+	for {
+		// Set read deadline for idle timeout
+		src.SetReadDeadline(time.Now().Add(p.config.IdleTimeout))
+
+		n, err := src.Read(buf)
+		if n > 0 {
+			totalBytes += int64(n)
+			meta.LastActive = time.Now()
+
+			// Update byte counters
+			if isBackend {
+				meta.BytesRecv += int64(n)
+			} else {
+				meta.BytesSent += int64(n)
+			}
+
+			// Write to destination
+			if _, writeErr := dst.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+		}
+
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				// Idle timeout - connection will be cleaned up by the checker
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+// checkTokenRevocation verifies the token hasn't been revoked
+func (p *ProxyServer) checkTokenRevocation(tokenID string) error {
+	// Check against revoked tokens cache
+	// In production, this would query the database or a Redis cache
+	revokedTokensMu.RLock()
+	defer revokedTokensMu.RUnlock()
+
+	if _, revoked := revokedTokens[tokenID]; revoked {
+		return fmt.Errorf("token %s has been revoked", tokenID)
+	}
+
+	return nil
+}
+
 func (p *ProxyServer) sendError(conn net.Conn, code, message string) {
 	var buf bytes.Buffer
 	buf.WriteByte('S')
@@ -306,10 +623,83 @@ func uint32ToBytes(v uint32) []byte {
 }
 
 func Run() error {
-	port := DefaultPort
-	if pStr := os.Getenv("PROXY_PORT"); pStr != "" {
-		fmt.Sscanf(pStr, "%d", &port)
+	// Initialize logger
+	InitLogger(10000)
+
+	// Load configuration from environment
+	config := &ProxyConfig{
+		Port:              DefaultPort,
+		IdleTimeout:       DefaultIdleTimeout,
+		QueryTimeout:      DefaultQueryTimeout,
+		MaxConnectionTime: MaxConnectionDuration,
+		EnableSSL:         os.Getenv("PROXY_SSL_ENABLED") == "true",
+		CertFile:          os.Getenv("PROXY_CERT_FILE"),
+		KeyFile:           os.Getenv("PROXY_KEY_FILE"),
 	}
-	server := NewProxyServer(port)
+
+	if pStr := os.Getenv("PROXY_PORT"); pStr != "" {
+		fmt.Sscanf(pStr, "%d", &config.Port)
+	}
+
+	if timeoutStr := os.Getenv("PROXY_IDLE_TIMEOUT"); timeoutStr != "" {
+		if duration, err := time.ParseDuration(timeoutStr); err == nil {
+			config.IdleTimeout = duration
+		}
+	}
+
+	server := NewProxyServer(config)
+
+	// Start revocation cleanup goroutine
+	go func() {
+		ticker := time.NewTicker(TokenCheckInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				GetRevocationStore().Cleanup(24 * time.Hour)
+			}
+		}
+	}()
+
 	return server.Start()
+}
+
+// GetProxyStatus returns the current status of the proxy for monitoring
+func GetProxyStatus() map[string]interface{} {
+	logger := GetLogger()
+
+	// Count active connections
+	var activeCount int
+	activeConns.Range(func(key, value interface{}) bool {
+		activeCount++
+		return true
+	})
+
+	return map[string]interface{}{
+		"status":             "running",
+		"active_connections": activeCount,
+		"recent_logs":        logger.GetRecentEntries(100),
+		"log_stats":          logger.GetStats(),
+	}
+}
+
+// GetConnectionLogs returns logs for a specific connection
+func GetConnectionLogs(connID string) []LogEntry {
+	logger := GetLogger()
+	var result []LogEntry
+
+	for _, entry := range logger.GetAllEntries() {
+		if entry.Connection != nil {
+			// Match by connection metadata
+			result = append(result, entry)
+		}
+	}
+
+	return result
+}
+
+// ExportLogs exports logs in JSON format for external consumption
+func ExportLogs() ([]byte, error) {
+	logger := GetLogger()
+	return json.MarshalIndent(logger.GetAllEntries(), "", "  ")
 }

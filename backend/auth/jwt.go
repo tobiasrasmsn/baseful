@@ -101,9 +101,16 @@ func ValidateJWT(tokenString string) (*JWTClaims, error) {
 }
 
 // GenerateConnectionString generates a PostgreSQL proxy connection string
-func GenerateConnectionString(jwtToken string, databaseID int, host string, port int) string {
+func GenerateConnectionString(jwtToken string, databaseID int, host string, port int, sslMode string) string {
 	// Format: postgresql://token:JWT@host:port/db_DATABASEID
-	return fmt.Sprintf("postgresql://token:%s@%s:%d/db_%d", jwtToken, host, port, databaseID)
+	connStr := fmt.Sprintf("postgresql://token:%s@%s:%d/db_%d", jwtToken, host, port, databaseID)
+
+	// Add SSL mode if specified
+	if sslMode != "" && sslMode != "disable" {
+		connStr = fmt.Sprintf("%s?sslmode=%s", connStr, sslMode)
+	}
+
+	return connStr
 }
 
 // GetProxyPort returns the PostgreSQL proxy port from environment

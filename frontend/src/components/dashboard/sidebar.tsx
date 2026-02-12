@@ -3,6 +3,7 @@ import {
   ClockCounterClockwiseIcon,
   CubeIcon,
   GearSixIcon,
+  Globe,
   GraphIcon,
   HouseIcon,
   MagnifyingGlassIcon,
@@ -63,7 +64,10 @@ export default function Sidebar() {
           const data = await res.json();
 
           // If the hash changed, the update finished and system restarted!
-          if (data.currentHash !== updateStatus?.currentHash && updateStatus?.currentHash) {
+          if (
+            data.currentHash !== updateStatus?.currentHash &&
+            updateStatus?.currentHash
+          ) {
             window.location.reload();
           }
 
@@ -124,7 +128,6 @@ export default function Sidebar() {
 
     return text;
   };
-
 
   const handleUpdate = async () => {
     if (
@@ -217,10 +220,11 @@ export default function Sidebar() {
                                 key={db.id}
                                 to={`/db/${db.id}/dashboard`}
                                 onClick={() => setSelectorOpen(false)}
-                                className={`flex flex-row items-center gap-2 p-2 rounded-md transition-colors ${selectedDatabase?.id === db.id
-                                  ? "bg-accent"
-                                  : "hover:bg-accent"
-                                  }`}
+                                className={`flex flex-row items-center gap-2 p-2 rounded-md transition-colors ${
+                                  selectedDatabase?.id === db.id
+                                    ? "bg-accent"
+                                    : "hover:bg-accent"
+                                }`}
                               >
                                 <Facehash
                                   name={db.name}
@@ -308,13 +312,14 @@ export default function Sidebar() {
 
             <ul className="flex flex-col gap-1">
               <li
-                className={`py-1.5 px-2.5 rounded-md ${location.pathname ===
+                className={`py-1.5 px-2.5 rounded-md ${
+                  location.pathname ===
                   (selectedDatabase
                     ? `/db/${selectedDatabase.id}/dashboard`
                     : "/")
-                  ? "bg-muted/50"
-                  : ""
-                  }`}
+                    ? "bg-muted/50"
+                    : ""
+                }`}
               >
                 <Link
                   to={
@@ -333,11 +338,12 @@ export default function Sidebar() {
                 </Link>
               </li>
               <li
-                className={`py-1.5 px-2.5 rounded-md ${location.pathname ===
+                className={`py-1.5 px-2.5 rounded-md ${
+                  location.pathname ===
                   (selectedDatabase ? `/db/${selectedDatabase.id}/tables` : "/")
-                  ? "bg-muted/50"
-                  : ""
-                  }`}
+                    ? "bg-muted/50"
+                    : ""
+                }`}
               >
                 <Link
                   to={
@@ -354,13 +360,14 @@ export default function Sidebar() {
                 </Link>
               </li>
               <li
-                className={`py-1.5 px-2.5 rounded-md ${location.pathname ===
+                className={`py-1.5 px-2.5 rounded-md ${
+                  location.pathname ===
                   (selectedDatabase
                     ? `/db/${selectedDatabase.id}/sql-editor`
                     : "/")
-                  ? "bg-muted/50"
-                  : ""
-                  }`}
+                    ? "bg-muted/50"
+                    : ""
+                }`}
               >
                 <Link
                   to={
@@ -380,11 +387,12 @@ export default function Sidebar() {
               </li>
 
               <li
-                className={`py-1.5 px-2.5 rounded-md ${location.pathname ===
+                className={`py-1.5 px-2.5 rounded-md ${
+                  location.pathname ===
                   (selectedDatabase ? `/db/${selectedDatabase.id}/backup` : "/")
-                  ? "bg-muted/50"
-                  : ""
-                  }`}
+                    ? "bg-muted/50"
+                    : ""
+                }`}
               >
                 <Link
                   to={
@@ -402,13 +410,14 @@ export default function Sidebar() {
               </li>
 
               <li
-                className={`py-1.5 px-2.5 rounded-md ${location.pathname ===
+                className={`py-1.5 px-2.5 rounded-md ${
+                  location.pathname ===
                   (selectedDatabase
                     ? `/db/${selectedDatabase.id}/settings`
                     : "/")
-                  ? "bg-muted/50"
-                  : ""
-                  }`}
+                    ? "bg-muted/50"
+                    : ""
+                }`}
               >
                 <Link
                   to={
@@ -438,13 +447,14 @@ export default function Sidebar() {
             </h2>
             <ul className="flex flex-col gap-1">
               <li
-                className={`py-1.5 px-2.5 rounded-md ${location.pathname ===
+                className={`py-1.5 px-2.5 rounded-md ${
+                  location.pathname ===
                   (selectedDatabase
                     ? `/db/${selectedDatabase.id}/monitoring`
                     : "/")
-                  ? "bg-muted/50"
-                  : ""
-                  }`}
+                    ? "bg-muted/50"
+                    : ""
+                }`}
               >
                 <Link
                   to={
@@ -463,13 +473,14 @@ export default function Sidebar() {
                 </Link>
               </li>
               <li
-                className={`py-1.5 px-2.5 rounded-md ${location.pathname ===
+                className={`py-1.5 px-2.5 rounded-md ${
+                  location.pathname ===
                   (selectedDatabase
                     ? `/db/${selectedDatabase.id}/containers`
                     : "/")
-                  ? "bg-muted/50"
-                  : ""
-                  }`}
+                    ? "bg-muted/50"
+                    : ""
+                }`}
               >
                 <Link
                   to={
@@ -485,6 +496,28 @@ export default function Sidebar() {
                     className="text-neutral-400"
                   />
                   <span>Containers</span>
+                </Link>
+              </li>
+              <li
+                className={`py-1.5 px-2.5 rounded-md ${
+                  location.pathname ===
+                  (selectedDatabase
+                    ? `/db/${selectedDatabase.id}/web-server`
+                    : "/")
+                    ? "bg-muted/50"
+                    : ""
+                }`}
+              >
+                <Link
+                  to={
+                    selectedDatabase
+                      ? `/db/${selectedDatabase.id}/web-server`
+                      : "/"
+                  }
+                  className="text-neutral-100 text-sm flex flex-row items-center gap-2"
+                >
+                  <Globe size={18} weight="bold" className="text-neutral-400" />
+                  <span>Web Server</span>
                 </Link>
               </li>
             </ul>

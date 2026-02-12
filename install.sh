@@ -29,7 +29,7 @@ error() { printf "%b%b%s%b\n" "$RED" "$BOLD" "$1" "$NC"; }
 printf "\033[H\033[2J"
 printf "%b%b" "$BLUE" "$BOLD"
 cat << "EOF"
-  ____                 _____       _ 
+  ____                 _____       _
  |  _ \               |  ___|     | |
  | |_) | __ _ ___  ___| |_ _   _| |
  |  _ < / _` / __|/ _ \  _| | | | |
@@ -102,7 +102,7 @@ ENV_EXAMPLE="backend/.env.example"
 
 if [ ! -f "$ENV_FILE" ]; then
     cp "$ENV_EXAMPLE" "$ENV_FILE"
-    
+
     # Generate a secure random JWT secret
     info "Generating secure JWT secret..."
     if command -v openssl >/dev/null 2>&1; then
@@ -110,25 +110,43 @@ if [ ! -f "$ENV_FILE" ]; then
     else
         RAND_SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)
     fi
-    
+
     # Update JWT_SECRET
     if sed --version 2>/dev/null | grep -q "GNU"; then
         sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$RAND_SECRET|" "$ENV_FILE"
     else
         sed -i '' "s|^JWT_SECRET=.*|JWT_SECRET=$RAND_SECRET|" "$ENV_FILE"
     fi
-    
+
     # Automatically detect Public IP
     info "Detecting Public IP..."
     DETECTED_IP=$(curl -s -4 https://ifconfig.me || curl -s -4 https://api.ipify.org || curl -s https://ifconfig.me || echo "localhost")
-    
+
     # Update PUBLIC_IP
     if sed --version 2>/dev/null | grep -q "GNU"; then
         sed -i "s|^PUBLIC_IP=.*|PUBLIC_IP=$DETECTED_IP|" "$ENV_FILE"
     else
         sed -i '' "s|^PUBLIC_IP=.*|PUBLIC_IP=$DETECTED_IP|" "$ENV_FILE"
     fi
-    
+
+    # Configure security settings with sensible defaults
+    info "Configuring security settings..."
+
+    # SSL/TLS - disabled by default for development
+    if sed --version 2>/dev/null | grep -q "GNU"; then
+        sed -i "s|^PROXY_SSL_ENABLED=.*|PROXY_SSL_ENABLED=false|" "$ENV_FILE"
+        sed -i "s|^PROXY_IDLE_TIMEOUT=.*|PROXY_IDLE_TIMEOUT=30m|" "$ENV_FILE"
+        sed -i "s|^PROXY_QUERY_TIMEOUT=.*|PROXY_QUERY_TIMEOUT=5m|" "$ENV_FILE"
+        sed -i "s|^PROXY_REVOCATION_CHECK=.*|PROXY_REVOCATION_CHECK=true|" "$ENV_FILE"
+        sed -i "s|^PROXY_MAX_LOG_ENTRIES=.*|PROXY_MAX_LOG_ENTRIES=10000|" "$ENV_FILE"
+    else
+        sed -i '' "s|^PROXY_SSL_ENABLED=.*|PROXY_SSL_ENABLED=false|" "$ENV_FILE"
+        sed -i '' "s|^PROXY_IDLE_TIMEOUT=.*|PROXY_IDLE_TIMEOUT=30m|" "$ENV_FILE"
+        sed -i '' "s|^PROXY_QUERY_TIMEOUT=.*|PROXY_QUERY_TIMEOUT=5m|" "$ENV_FILE"
+        sed -i '' "s|^PROXY_REVOCATION_CHECK=.*|PROXY_REVOCATION_CHECK=true|" "$ENV_FILE"
+        sed -i '' "s|^PROXY_MAX_LOG_ENTRIES=.*|PROXY_MAX_LOG_ENTRIES=10000|" "$ENV_FILE"
+    fi
+
     success "✓ Configured .env with IP: $DETECTED_IP"
 else
     warn "Existing .env file found. Skipping configuration."

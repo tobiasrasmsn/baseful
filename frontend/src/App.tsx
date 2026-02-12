@@ -2,10 +2,13 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import About from "./pages/About";
 import DatabaseDetail from "./pages/DatabaseDetail";
+import DatabaseConnections from "./pages/DatabaseConnections";
 import Settings from "./pages/Settings";
 import SQLEditor from "./pages/SQLEditor";
 import Tables from "./pages/Tables";
 import Containers from "./pages/Containers";
+import Monitoring from "./pages/Monitoring";
+import WebServer from "./pages/WebServer";
 import Branches from "./pages/branches/Branches";
 import Sidebar from "./components/dashboard/sidebar";
 import { ThemeProvider } from "./components/theme-provider";
@@ -40,13 +43,15 @@ function App() {
                       path="/db/:id/overview"
                       element={<DatabaseDetail />}
                     />
-                    <Route
-                      path="/db/:id/monitoring"
-                      element={<DatabaseDetail />}
-                    />
+                    <Route path="/db/:id/monitoring" element={<Monitoring />} />
                     <Route path="/db/:id/sql-editor" element={<SQLEditor />} />
+                    <Route
+                      path="/db/:id/connections"
+                      element={<DatabaseConnections />}
+                    />
                     <Route path="/db/:id/tables" element={<Tables />} />
                     <Route path="/db/:id/containers" element={<Containers />} />
+                    <Route path="/db/:id/web-server" element={<WebServer />} />
                     <Route path="/db/:id/backup" element={<DatabaseDetail />} />
                   </Routes>
                 </div>

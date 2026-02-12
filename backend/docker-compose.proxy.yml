@@ -17,9 +17,11 @@ services:
       - DB_PATH=/app/data/data.db
     volumes:
       - .:/app/data:ro
+      - ./server.crt:/app/server.crt:ro
+      - ./server.key:/app/server.key:ro
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "nc", "-z", "localhost", "6432" ]
+      test: ["CMD", "nc", "-z", "localhost", "6432"]
       interval: 30s
       timeout: 10s
       retries: 3

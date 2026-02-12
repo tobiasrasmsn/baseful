@@ -105,6 +105,15 @@ func InitDB() error {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (database_id) REFERENCES databases(id)
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+
+    -- Insert default settings if they don't exist
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('metrics_enabled', 'true');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('metrics_sample_rate', '5');
     `
 
 	_, err = DB.Exec(schema)
@@ -155,4 +164,20 @@ func GetDatabaseByID(databaseID int) (*DatabaseInfo, error) {
 	}
 
 	return &dbInfo, nil
+}
+
+// GetSetting returns the value of a setting by key
+func GetSetting(key string) (string, error) {
+	var value string
+	err := DB.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&value)
+	if err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+// UpdateSetting updates the value of a setting by key
+func UpdateSetting(key, value string) error {
+	_, err := DB.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", key, value)
+	return err
 }

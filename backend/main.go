@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"baseful/auth"
 	"baseful/db"
 	"baseful/docker"
+	"baseful/metrics"
 	"baseful/proxy"
 	"baseful/system"
 )
@@ -68,6 +70,13 @@ func main() {
 		panic(err)
 	}
 
+	// Initialize metrics system
+	if err := metrics.InitMetricsDB(); err != nil {
+		fmt.Printf("Warning: Failed to initialize metrics DB: %v\n", err)
+	} else {
+		metrics.StartCollector()
+	}
+
 	// Initialize PostgreSQL Proxy - Check if we should only run the proxy
 	if os.Getenv("PROXY_ONLY") == "true" {
 		fmt.Println("Initializing PostgreSQL Proxy (Standalone mode)...")
@@ -103,6 +112,91 @@ func main() {
 
 	r.GET("/api/system/update-status", func(c *gin.Context) {
 		c.JSON(200, system.GetUpdateStatus())
+	})
+
+	// Web Server Endpoints
+	r.GET("/api/system/webserver/status", func(c *gin.Context) {
+		info, err := system.GetDomainInfo()
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, info)
+	})
+
+	r.POST("/api/system/webserver/domain", func(c *gin.Context) {
+		var req struct {
+			Domain string `json:"domain"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		if err := system.SaveDomain(req.Domain); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"message": "Domain saved"})
+	})
+
+	r.GET("/api/system/webserver/check-dns", func(c *gin.Context) {
+		domain, _ := db.GetSetting("domain_name")
+		if domain == "" {
+			c.JSON(400, gin.H{"error": "No domain configured"})
+			return
+		}
+		propagated, err := system.CheckPropagation(domain)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"propagated": propagated})
+	})
+
+	r.POST("/api/system/webserver/provision-ssl", func(c *gin.Context) {
+		domain, _ := db.GetSetting("domain_name")
+		if domain == "" {
+			c.JSON(400, gin.H{"error": "No domain configured"})
+			return
+		}
+		if err := system.ProvisionSSL(domain); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"message": "SSL provisioned successfully"})
+	})
+
+	// Get monitoring settings
+	r.GET("/api/settings", func(c *gin.Context) {
+		enabled, _ := db.GetSetting("metrics_enabled")
+		rateStr, _ := db.GetSetting("metrics_sample_rate")
+		rate, _ := strconv.Atoi(rateStr)
+		c.JSON(200, gin.H{
+			"metrics_enabled":     enabled == "true",
+			"metrics_sample_rate": rate,
+		})
+	})
+
+	// Update monitoring settings
+	r.POST("/api/settings", func(c *gin.Context) {
+		var req struct {
+			MetricsEnabled    bool   `json:"metrics_enabled"`
+			MetricsSampleRate string `json:"metrics_sample_rate"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		enabledStr := "false"
+		if req.MetricsEnabled {
+			enabledStr = "true"
+		}
+
+		_ = db.UpdateSetting("metrics_enabled", enabledStr)
+		_ = db.UpdateSetting("metrics_sample_rate", req.MetricsSampleRate)
+
+		c.JSON(200, gin.H{"status": "ok"})
 	})
 
 	r.POST("/api/system/update-check", func(c *gin.Context) {
@@ -443,7 +537,7 @@ func main() {
 		proxyHost := auth.GetProxyHost()
 		proxyPort := auth.GetProxyPort()
 		portInt, _ := strconv.Atoi(proxyPort)
-		connectionString := auth.GenerateConnectionString(jwtToken, int(databaseID), proxyHost, portInt)
+		connectionString := auth.GenerateConnectionString(jwtToken, int(databaseID), proxyHost, portInt, "disable")
 
 		c.JSON(200, gin.H{
 			"message":           "Database created and started",
@@ -479,7 +573,7 @@ func main() {
 		portInt, _ := strconv.Atoi(proxyPort)
 
 		// Return censored connection string (actual token not exposed)
-		connectionString := auth.GenerateConnectionString("***CENSORED***", db_id, proxyHost, portInt)
+		connectionString := auth.GenerateConnectionString("***CENSORED***", db_id, proxyHost, portInt, "disable")
 
 		response := gin.H{
 			"id":                db_id,
@@ -1332,7 +1426,7 @@ func main() {
 		proxyHost := auth.GetProxyHost()
 		proxyPort := auth.GetProxyPort()
 		portInt, _ := strconv.Atoi(proxyPort)
-		connectionString := auth.GenerateConnectionString(jwtToken, databaseID, proxyHost, portInt)
+		connectionString := auth.GenerateConnectionString(jwtToken, databaseID, proxyHost, portInt, "disable")
 
 		c.JSON(200, gin.H{
 			"message":           "Token rotated successfully",
@@ -1363,6 +1457,15 @@ func main() {
 			return
 		}
 
+		// Get SSL mode from query parameter
+		sslMode := c.DefaultQuery("ssl", "disable")
+		// Handle "true" from frontend as "require"
+		if sslMode == "true" {
+			sslMode = "require"
+		} else if sslMode != "require" && sslMode != "disable" {
+			sslMode = "disable"
+		}
+
 		// Get existing active token
 		tokenRecord, err := db.GetActiveTokenForDatabase(dbID)
 		if err != nil || tokenRecord == nil {
@@ -1376,12 +1479,14 @@ func main() {
 			proxyHost := auth.GetProxyHost()
 			proxyPort := auth.GetProxyPort()
 			portInt, _ := strconv.Atoi(proxyPort)
-			connectionString := auth.GenerateConnectionString(jwtToken, dbID, proxyHost, portInt)
+			connectionString := auth.GenerateConnectionString(jwtToken, dbID, proxyHost, portInt, sslMode)
 
 			c.JSON(200, gin.H{
+				"message":           "Database started",
 				"connection_string": connectionString,
 				"expires_at":        expiresAt,
 				"warning":           "Copy this connection string now. You will not be able to see it again. Store it securely.",
+				"ssl_enabled":       sslMode == "require",
 			})
 			return
 		}
@@ -1396,7 +1501,7 @@ func main() {
 		proxyHost := auth.GetProxyHost()
 		proxyPort := auth.GetProxyPort()
 		portInt, _ := strconv.Atoi(proxyPort)
-		connectionString := auth.GenerateConnectionString(jwtToken, dbID, proxyHost, portInt)
+		connectionString := auth.GenerateConnectionString(jwtToken, dbID, proxyHost, portInt, sslMode)
 
 		c.JSON(200, gin.H{
 			"connection_string": connectionString,
@@ -1450,7 +1555,15 @@ func main() {
 				CPUUsage struct {
 					TotalUsage float64 `json:"total_usage"`
 				} `json:"cpu_usage"`
+				SystemUsage float64 `json:"system_cpu_usage"`
+				OnlineCPUs  float64 `json:"online_cpus"`
 			} `json:"cpu_stats"`
+			PreCPUStats struct {
+				CPUUsage struct {
+					TotalUsage float64 `json:"total_usage"`
+				} `json:"cpu_usage"`
+				SystemUsage float64 `json:"system_cpu_usage"`
+			} `json:"precpu_stats"`
 			MemoryStats struct {
 				Usage float64 `json:"usage"`
 				Limit float64 `json:"limit"`
@@ -1462,20 +1575,24 @@ func main() {
 		}
 		statsReader.Body.Close()
 
-		// Get container info to get CPU limit
-		containerInfo, err := cli.ContainerInspect(ctx, containerID)
-		if err == nil {
-			cpuLimit := containerInfo.HostConfig.NanoCPUs
-			if cpuLimit > 0 {
-				stats.CPUStats.CPUUsage.TotalUsage = (stats.CPUStats.CPUUsage.TotalUsage / float64(cpuLimit)) * 100
-			}
+		// Calculate CPU percentage using Docker's delta algorithm
+		cpuPercent := 0.0
+		cpuDelta := stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage
+		systemDelta := stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage
+		onlineCPUs := stats.CPUStats.OnlineCPUs
+		if onlineCPUs == 0 {
+			onlineCPUs = 1
+		}
+
+		if systemDelta > 0 && cpuDelta > 0 {
+			cpuPercent = (cpuDelta / systemDelta) * onlineCPUs * 100.0
 		}
 
 		// Get active connections count (exclude metrics queries by application_name)
 		var activeConnections int
 		if status == "active" {
 			cmd := []string{"psql", "-U", "postgres", "-t", "-c",
-				"SELECT count(*) FROM pg_stat_activity WHERE application_name = 'baseful-metrics'"}
+				"SELECT count(*) FROM pg_stat_activity WHERE application_name IS NULL OR application_name != 'baseful-metrics'"}
 			execResp, err := cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
 				Cmd:          cmd,
 				AttachStdout: true,
@@ -1485,9 +1602,14 @@ func main() {
 				attachResp, err := cli.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
 				if err == nil {
 					var stdout bytes.Buffer
-					_, _ = stdcopy.StdCopy(&stdout, &bytes.Buffer{}, attachResp.Reader)
+					var stderr bytes.Buffer
+					_, _ = stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader)
 					attachResp.Close()
-					activeConnections, _ = strconv.Atoi(strings.TrimSpace(stdout.String()))
+					output := strings.TrimSpace(stdout.String())
+					activeConnections, err = strconv.Atoi(output)
+					if err != nil {
+						log.Printf("Failed to parse connection count: %v, output: %q, stderr: %q", err, output, stderr.String())
+					}
 				}
 			}
 		}
@@ -1506,17 +1628,15 @@ func main() {
 				attachResp, err := cli.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
 				if err == nil {
 					var stdout bytes.Buffer
-					_, _ = stdcopy.StdCopy(&stdout, &bytes.Buffer{}, attachResp.Reader)
+					var stderr bytes.Buffer
+					_, _ = stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader)
 					attachResp.Close()
 					dbSize = strings.TrimSpace(stdout.String())
+					if dbSize == "" && stderr.Len() > 0 {
+						log.Printf("Failed to get database size, stderr: %q", stderr.String())
+					}
 				}
 			}
-		}
-
-		// Calculate CPU percentage (simplified)
-		cpuPercent := 0.0
-		if stats.CPUStats.CPUUsage.TotalUsage > 0 {
-			cpuPercent = (stats.CPUStats.CPUUsage.TotalUsage / 1000000000) * 100
 		}
 
 		// Calculate memory usage
@@ -1527,14 +1647,226 @@ func main() {
 			memoryPercent = (stats.MemoryStats.Usage / stats.MemoryStats.Limit) * 100
 		}
 
+		// Get extra performance metrics
+		var cacheHitRatio float64
+		var uptimeSeconds int
+		var maxConnections int
+		var totalTransactions int64
+		var longestQuerySeconds float64
+
+		if status == "active" {
+			cmd := []string{"psql", "-U", "postgres", "-t", "-A", "-c",
+				`SELECT json_build_object(
+					'cache_hit_ratio', COALESCE(round(sum(blks_hit) * 100 / NULLIF(sum(blks_hit) + sum(blks_read), 0), 2), 0),
+					'uptime_seconds', extract(epoch from now() - pg_postmaster_start_time())::int,
+					'max_connections', (SELECT setting::int FROM pg_settings WHERE name = 'max_connections'),
+					'total_transactions', sum(xact_commit + xact_rollback),
+					'longest_query_seconds', COALESCE((SELECT extract(epoch from max(now() - query_start)) FROM pg_stat_activity WHERE state != 'idle'), 0)
+				) FROM pg_stat_database`}
+			execResp, err := cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+				Cmd:          cmd,
+				AttachStdout: true,
+				AttachStderr: true,
+			})
+			if err == nil {
+				attachResp, err := cli.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+				if err == nil {
+					var stdout bytes.Buffer
+					_, _ = stdcopy.StdCopy(&stdout, &bytes.Buffer{}, attachResp.Reader)
+					attachResp.Close()
+					var extra struct {
+						CacheHitRatio       float64 `json:"cache_hit_ratio"`
+						UptimeSeconds       int     `json:"uptime_seconds"`
+						MaxConnections      int     `json:"max_connections"`
+						TotalTransactions   int64   `json:"total_transactions"`
+						LongestQuerySeconds float64 `json:"longest_query_seconds"`
+					}
+					if err := json.Unmarshal(stdout.Bytes(), &extra); err == nil {
+						cacheHitRatio = extra.CacheHitRatio
+						uptimeSeconds = extra.UptimeSeconds
+						maxConnections = extra.MaxConnections
+						totalTransactions = extra.TotalTransactions
+						longestQuerySeconds = extra.LongestQuerySeconds
+					}
+				}
+			}
+		}
+
+		// Get latest I/O rates from metrics history
+		var ioReadBps, ioWriteBps float64
+		_ = metrics.MetricsDB.QueryRow("SELECT io_read_bps, io_write_bps FROM samples WHERE database_id = ? ORDER BY timestamp DESC LIMIT 1", id).Scan(&ioReadBps, &ioWriteBps)
+
 		c.JSON(200, gin.H{
-			"active_connections":   activeConnections,
-			"database_size":        dbSize,
-			"cpu_usage_percent":    cpuPercent,
-			"memory_usage_mb":      memoryUsageMB,
-			"memory_limit_mb":      memoryLimitMB,
-			"memory_usage_percent": memoryPercent,
+			"active_connections":    activeConnections,
+			"database_size":         dbSize,
+			"cpu_usage_percent":     cpuPercent,
+			"memory_usage_mb":       memoryUsageMB,
+			"memory_limit_mb":       memoryLimitMB,
+			"memory_usage_percent":  memoryPercent,
+			"cache_hit_ratio":       cacheHitRatio,
+			"uptime_seconds":        uptimeSeconds,
+			"max_connections":       maxConnections,
+			"total_transactions":    totalTransactions,
+			"longest_query_seconds": longestQuerySeconds,
+			"io_read_bps":           ioReadBps,
+			"io_write_bps":          ioWriteBps,
 		})
+	})
+
+	// Get detailed database connections
+	r.GET("/api/databases/:id/connections", func(c *gin.Context) {
+		id := c.Param("id")
+		var containerID, status string
+		err := db.DB.QueryRow("SELECT container_id, status FROM databases WHERE id = ?", id).Scan(&containerID, &status)
+		if err != nil {
+			c.JSON(404, gin.H{"error": "Database not found"})
+			return
+		}
+
+		if status != "active" {
+			c.JSON(200, []interface{}{})
+			return
+		}
+
+		ctx := context.Background()
+		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to connect to Docker"})
+			return
+		}
+		defer cli.Close()
+
+		// Query pg_stat_activity
+		// We exclude the metrics connection and the current psql command itself
+		// Use -t (tuples only) and -A (unaligned) to get clean JSON output without headers/padding
+		cmd := []string{"psql", "-U", "postgres", "-d", "postgres", "-t", "-A", "-c",
+			`SELECT json_agg(t) FROM (
+				SELECT
+					pid,
+					usename as user,
+					client_addr as ip,
+					backend_start as started_at,
+					state,
+					query,
+					application_name,
+					backend_type
+				FROM pg_stat_activity
+				WHERE (application_name IS NULL OR application_name != 'baseful-metrics')
+				AND pid != pg_backend_pid()
+			) t`}
+
+		execResp, err := cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+			Cmd:          cmd,
+			AttachStdout: true,
+			AttachStderr: true,
+		})
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to execute command in container"})
+			return
+		}
+
+		attachResp, err := cli.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to attach to container exec"})
+			return
+		}
+		defer attachResp.Close()
+
+		var stdout, stderr bytes.Buffer
+		_, _ = stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader)
+
+		output := strings.TrimSpace(stdout.String())
+		if output == "" || output == "null" {
+			if stderr.Len() > 0 {
+				log.Printf("psql error: %s", stderr.String())
+			}
+			c.JSON(200, []interface{}{})
+			return
+		}
+
+		var connections []interface{}
+		if err := json.Unmarshal([]byte(output), &connections); err != nil {
+			log.Printf("Failed to parse connections JSON: %v, output: %s", err, output)
+			c.JSON(200, []interface{}{})
+			return
+		}
+
+		c.JSON(200, connections)
+	})
+
+	// Get database metrics history
+	r.GET("/api/databases/:id/metrics/history", func(c *gin.Context) {
+		id := c.Param("id")
+		dbID, err := strconv.Atoi(id)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+
+		history, err := metrics.GetHistory(dbID)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to get metrics history"})
+			return
+		}
+
+		c.JSON(200, history)
+	})
+
+	// Terminate a database connection
+	r.POST("/api/databases/:id/connections/:pid/terminate", func(c *gin.Context) {
+		id := c.Param("id")
+		pid := c.Param("pid")
+
+		var containerID, status string
+		err := db.DB.QueryRow("SELECT container_id, status FROM databases WHERE id = ?", id).Scan(&containerID, &status)
+		if err != nil {
+			c.JSON(404, gin.H{"error": "Database not found"})
+			return
+		}
+
+		if status != "active" {
+			c.JSON(400, gin.H{"error": "Database is not active"})
+			return
+		}
+
+		ctx := context.Background()
+		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to connect to Docker"})
+			return
+		}
+		defer cli.Close()
+
+		// Execute pg_terminate_backend
+		cmd := []string{"psql", "-U", "postgres", "-d", "postgres", "-t", "-A", "-c",
+			fmt.Sprintf("SELECT pg_terminate_backend(%s)", pid)}
+
+		execResp, err := cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+			Cmd:          cmd,
+			AttachStdout: true,
+			AttachStderr: true,
+		})
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to execute command in container"})
+			return
+		}
+
+		attachResp, err := cli.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to attach to container exec"})
+			return
+		}
+		defer attachResp.Close()
+
+		var stdout, stderr bytes.Buffer
+		_, _ = stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader)
+
+		output := strings.TrimSpace(stdout.String())
+		if output == "t" {
+			c.JSON(200, gin.H{"message": "Connection terminated"})
+		} else {
+			c.JSON(500, gin.H{"error": "Failed to terminate connection", "details": stderr.String()})
+		}
 	})
 
 	// ========== RESOURCE LIMITS ==========
