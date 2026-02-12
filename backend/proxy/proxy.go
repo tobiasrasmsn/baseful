@@ -294,12 +294,14 @@ func (p *ProxyServer) handleConnection(frontend net.Conn) {
 	// 1. Handle Frontend Handshake (JWT Auth) with timeout
 	frontend.SetDeadline(time.Now().Add(AuthTimeout))
 
-	startupParams, jwtToken, err := p.handleFrontendHandshake(frontend)
+	newFrontend, startupParams, jwtToken, err := p.handleFrontendHandshake(frontend)
 	if err != nil {
 		p.logger.ConnectionFailed(clientIP, 0, p.port, "handshake failed", err)
 		p.sendError(frontend, "08000", "Connection handshake failed")
 		return
 	}
+	// Update frontend connection if it was upgraded to TLS
+	frontend = newFrontend
 
 	// 2. Validate JWT and check token revocation
 	claims, err := auth.ValidateJWT(jwtToken)
@@ -400,44 +402,50 @@ func (p *ProxyServer) handleConnection(frontend net.Conn) {
 	p.activeConns.Delete(connID)
 }
 
-func (p *ProxyServer) handleFrontendHandshake(conn net.Conn) (map[string]string, string, error) {
+func (p *ProxyServer) handleFrontendHandshake(conn net.Conn) (net.Conn, map[string]string, string, error) {
 	// Read Length
 	lenBuf := make([]byte, 4)
 	if _, err := io.ReadFull(conn, lenBuf); err != nil {
-		return nil, "", err
+		return conn, nil, "", err
 	}
 	length := binary.BigEndian.Uint32(lenBuf)
 
 	// Handle SSL Request
 	if length == 8 {
 		codeBuf := make([]byte, 4)
-		io.ReadFull(conn, codeBuf)
+		if _, err := io.ReadFull(conn, codeBuf); err != nil {
+			return conn, nil, "", err
+		}
 		if binary.BigEndian.Uint32(codeBuf) == 80877103 {
 			if p.tlsConfig != nil {
 				// Accept SSL
 				conn.Write([]byte{'S'})
 				tlsConn := tls.Server(conn, p.tlsConfig)
 				if err := tlsConn.Handshake(); err != nil {
-					return nil, "", fmt.Errorf("TLS handshake failed: %v", err)
+					return conn, nil, "", fmt.Errorf("TLS handshake failed: %v", err)
 				}
+				// After SSL handshake, we must read the actual StartupMessage
 				conn = tlsConn
+				if _, err := io.ReadFull(conn, lenBuf); err != nil {
+					return conn, nil, "", err
+				}
+				length = binary.BigEndian.Uint32(lenBuf)
 			} else {
 				// Reject SSL
 				conn.Write([]byte{'N'})
+				// After rejecting SSL, the client sends the StartupMessage unencrypted
+				if _, err := io.ReadFull(conn, lenBuf); err != nil {
+					return conn, nil, "", err
+				}
+				length = binary.BigEndian.Uint32(lenBuf)
 			}
-
-			// Read next message (StartupMessage)
-			if _, err := io.ReadFull(conn, lenBuf); err != nil {
-				return nil, "", err
-			}
-			length = binary.BigEndian.Uint32(lenBuf)
 		}
 	}
 
 	// Read StartupMessage
 	payload := make([]byte, length-4)
 	if _, err := io.ReadFull(conn, payload); err != nil {
-		return nil, "", err
+		return conn, nil, "", err
 	}
 
 	params := make(map[string]string)
@@ -466,21 +474,23 @@ func (p *ProxyServer) handleFrontendHandshake(conn net.Conn) (map[string]string,
 	// Read PasswordMessage
 	header := make([]byte, 5)
 	if _, err := io.ReadFull(conn, header); err != nil {
-		return nil, "", err
+		return conn, nil, "", err
 	}
 	if header[0] != 'p' {
-		return nil, "", fmt.Errorf("expected password message, got %c", header[0])
+		return conn, nil, "", fmt.Errorf("expected password message, got %c", header[0])
 	}
 	passLen := binary.BigEndian.Uint32(header[1:5])
 	passPayload := make([]byte, passLen-4)
-	io.ReadFull(conn, passPayload)
+	if _, err := io.ReadFull(conn, passPayload); err != nil {
+		return conn, nil, "", err
+	}
 	jwtToken := string(bytes.TrimSuffix(passPayload, []byte{0}))
 
 	// Send Auth OK to frontend immediately so it knows we accepted the "password"
 	// 'R' + length(8) + code(0)
 	conn.Write([]byte{'R', 0, 0, 0, 8, 0, 0, 0, 0})
 
-	return params, jwtToken, nil
+	return conn, params, jwtToken, nil
 }
 
 func (p *ProxyServer) handleBackendHandshake(backend net.Conn, dbInfo *db.DatabaseInfo, params map[string]string, frontend net.Conn) error {
