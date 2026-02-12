@@ -122,9 +122,6 @@ export default function WebServer() {
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3 mb-8">
-        <div className="p-2 bg-blue-500/10 rounded-lg">
-          <Globe size={24} className="text-blue-500" />
-        </div>
         <div>
           <h1 className="text-2xl font-bold">Web Server</h1>
           <p className="text-neutral-400 text-sm">
