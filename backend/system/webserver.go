@@ -60,7 +60,6 @@ func ProvisionSSL(domain string) error {
 
 	// Get ports
 	backendPort := 8080
-	dashboardPort := 3000
 
 	// When running in Docker, we can use the service names defined in docker-compose.
 	// 'baseful-frontend' is the container name for the frontend.

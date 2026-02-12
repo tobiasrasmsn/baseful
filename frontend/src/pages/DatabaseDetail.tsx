@@ -698,7 +698,7 @@ export default function DatabaseDetail() {
                 </div>
               )}
             </div>
-            <div className="h-[250px] w-full p-4">
+            <div className="h-[250px] w-full p-4 scale-105">
               {metricsLoading ? (
                 <Skeleton className="h-full w-full rounded-md" />
               ) : (
@@ -829,7 +829,7 @@ export default function DatabaseDetail() {
                 Peak Connections (1H)
               </h3>
             </div>
-            <div className="h-[250px] w-full p-4">
+            <div className="h-[250px] w-full p-4 scale-105">
               {metricsLoading ? (
                 <Skeleton className="h-full w-full rounded-md" />
               ) : (
