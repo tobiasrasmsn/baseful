@@ -114,14 +114,7 @@ func (p *ProxyServer) Start() error {
 
 	addr := fmt.Sprintf(":%d", p.port)
 
-	var listener net.Listener
-	if p.tlsConfig != nil {
-		listener, err = tls.Listen("tcp", addr, p.tlsConfig)
-		p.logger.Info("TLS listener started", nil, map[string]string{"port": fmt.Sprintf("%d", p.port)})
-	} else {
-		listener, err = net.Listen("tcp", addr)
-	}
-
+	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
@@ -419,12 +412,14 @@ func (p *ProxyServer) handleFrontendHandshake(conn net.Conn) (net.Conn, map[stri
 		if binary.BigEndian.Uint32(codeBuf) == 80877103 {
 			if p.tlsConfig != nil {
 				// Accept SSL
-				conn.Write([]byte{'S'})
+				if _, err := conn.Write([]byte{'S'}); err != nil {
+					return conn, nil, "", err
+				}
 				tlsConn := tls.Server(conn, p.tlsConfig)
 				if err := tlsConn.Handshake(); err != nil {
 					return conn, nil, "", fmt.Errorf("TLS handshake failed: %v", err)
 				}
-				// After SSL handshake, we must read the actual StartupMessage
+				// After SSL handshake, the client sends the actual StartupMessage
 				conn = tlsConn
 				if _, err := io.ReadFull(conn, lenBuf); err != nil {
 					return conn, nil, "", err
