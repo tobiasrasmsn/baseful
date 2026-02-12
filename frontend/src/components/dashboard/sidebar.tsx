@@ -54,7 +54,9 @@ export default function Sidebar() {
   const location = useLocation();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(
+    localStorage.getItem("baseful_is_updating") === "true",
+  );
   const [updateStatus, setUpdateStatus] = useState<{
     available: boolean;
     currentHash: string;
@@ -94,7 +96,10 @@ export default function Sidebar() {
           }
 
           setUpdateStatus(data);
-          if (!data.updatingStatus) setIsUpdating(false);
+          if (!data.updatingStatus) {
+            setIsUpdating(false);
+            localStorage.removeItem("baseful_is_updating");
+          }
         } catch (e) {
           // If fetch fails, the system might be restarting
           console.log("System unreachable, likely restarting...");
@@ -160,6 +165,7 @@ export default function Sidebar() {
       return;
 
     setIsUpdating(true);
+    localStorage.setItem("baseful_is_updating", "true");
     try {
       const res = await fetch("/api/system/update", { method: "POST" });
       if (!res.ok) throw new Error("Update failed");

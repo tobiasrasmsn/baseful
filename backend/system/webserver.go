@@ -7,9 +7,35 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 
 	"baseful/db"
 )
+
+func updateEnvFile(domain string) error {
+	envPath := "./.env"
+	content, err := os.ReadFile(envPath)
+	if err != nil {
+		// If file doesn't exist, create it
+		return os.WriteFile(envPath, []byte(fmt.Sprintf("DOMAIN_NAME=%s\n", domain)), 0644)
+	}
+
+	lines := strings.Split(string(content), "\n")
+	found := false
+	for i, line := range lines {
+		if strings.HasPrefix(line, "DOMAIN_NAME=") {
+			lines[i] = fmt.Sprintf("DOMAIN_NAME=%s", domain)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		lines = append(lines, fmt.Sprintf("DOMAIN_NAME=%s", domain))
+	}
+
+	return os.WriteFile(envPath, []byte(strings.Join(lines, "\n")), 0644)
+}
 
 type DomainInfo struct {
 	Domain        string `json:"domain"`
@@ -145,5 +171,8 @@ func GetDomainInfo() (*DomainInfo, error) {
 }
 
 func SaveDomain(domain string) error {
+	if err := updateEnvFile(domain); err != nil {
+		fmt.Printf("Warning: Failed to update .env file: %v\n", err)
+	}
 	return db.UpdateSetting("domain_name", domain)
 }
