@@ -101,6 +101,18 @@ func main() {
 		}
 	}()
 
+	// Restore Web Server (Caddy) configuration if domain is set
+	go func() {
+		domain, _ := db.GetSetting("domain_name")
+		if domain != "" {
+			fmt.Printf("Restoring Web Server configuration for domain: %s\n", domain)
+			if err := system.ProvisionSSL(domain); err != nil {
+				fmt.Printf("Warning: Failed to restore Web Server configuration: %v\n", err)
+			}
+		}
+	}()
+
+	// Initialize update checker
 	fmt.Println("Initializing Update Sentinel...")
 	system.InitUpdateChecker()
 
