@@ -136,3 +136,27 @@
         transform: rotate(360deg);
     }
 }
+
+@keyframes aurora-border {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+@keyframes aurora-pulse {
+    0%,
+    100% {
+        opacity: 0.5;
+        filter: blur(10px);
+    }
+    50% {
+        opacity: 0.8;
+        filter: blur(15px);
+    }
+}

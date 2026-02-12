@@ -46,8 +46,10 @@ services:
       - DB_READ_ONLY=true
       - PROXY_ONLY=true
       - DB_PATH=/app/data/data.db
+      - DOMAIN_NAME=${DOMAIN_NAME}
     volumes:
       - ./backend-data:/app/data:ro
+      - ./caddy-data:/root/.local/share/caddy:ro
     ports:
       - "6432:6432"
     networks:

@@ -11,6 +11,7 @@ import {
   TableIcon,
   TerminalIcon,
   ArrowClockwise,
+  SpinnerIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -24,6 +25,27 @@ import CreateDatabaseDialog from "@/components/database/CreateDatabaseDialog";
 import CreateProjectDialog from "@/components/project/CreateProjectDialog";
 import { useDatabase } from "@/context/DatabaseContext";
 import { useProject } from "@/context/ProjectContext";
+
+const AuroraOverlay = () => (
+  <div className="fixed inset-0 z-[9999] pointer-events-auto flex items-center justify-center overflow-hidden">
+    {/* Full screen backdrop */}
+    <div className="absolute inset-0 bg-background/60 backdrop-blur-md" />
+
+    {/* Content */}
+    <div className="relative z-10 flex flex-col items-center gap-6 text-center px-6">
+      <div className="space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight text-white">
+          System Update in Progress
+        </h2>
+        <p className="text-neutral-400 max-w-md mx-auto text-lg">
+          Installing the latest features and security patches. This will take a
+          moment.
+        </p>
+      </div>
+      <SpinnerIcon size={32} className="animate-spin" />
+    </div>
+  </div>
+);
 
 export default function Sidebar() {
   const { selectedDatabase, setSelectedDatabase, databases, refreshDatabases } =
@@ -160,6 +182,7 @@ export default function Sidebar() {
 
   return (
     <div className="w-72 p-2 flex flex-col h-full">
+      {!isUpdating && <AuroraOverlay />}
       <div className="mb-6 flex flex-row items-center justify-between">
         {/* Combined Project/Database Selector */}
         <Popover open={selectorOpen} onOpenChange={setSelectorOpen}>

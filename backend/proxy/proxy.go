@@ -413,7 +413,20 @@ func (p *ProxyServer) handleFrontendHandshake(conn net.Conn) (map[string]string,
 		codeBuf := make([]byte, 4)
 		io.ReadFull(conn, codeBuf)
 		if binary.BigEndian.Uint32(codeBuf) == 80877103 {
-			conn.Write([]byte{'N'}) // No SSL
+			if p.tlsConfig != nil {
+				// Accept SSL
+				conn.Write([]byte{'S'})
+				tlsConn := tls.Server(conn, p.tlsConfig)
+				if err := tlsConn.Handshake(); err != nil {
+					return nil, "", fmt.Errorf("TLS handshake failed: %v", err)
+				}
+				conn = tlsConn
+			} else {
+				// Reject SSL
+				conn.Write([]byte{'N'})
+			}
+
+			// Read next message (StartupMessage)
 			if _, err := io.ReadFull(conn, lenBuf); err != nil {
 				return nil, "", err
 			}
@@ -632,9 +645,27 @@ func Run() error {
 		IdleTimeout:       DefaultIdleTimeout,
 		QueryTimeout:      DefaultQueryTimeout,
 		MaxConnectionTime: MaxConnectionDuration,
-		EnableSSL:         os.Getenv("PROXY_SSL_ENABLED") == "true",
+		EnableSSL:         true, // Always enable SSL support if certificates are found
 		CertFile:          os.Getenv("PROXY_CERT_FILE"),
 		KeyFile:           os.Getenv("PROXY_KEY_FILE"),
+	}
+
+	// Auto-detect Caddy certificates if domain is set
+	if config.CertFile == "" {
+		domain := os.Getenv("DOMAIN_NAME")
+		if domain != "" {
+			// Caddy stores certificates in /root/.local/share/caddy/certificates/acme-v02.api.letsencrypt.org-directory/DOMAIN/
+			// We look for them in the mounted volume
+			basePath := "/root/.local/share/caddy/certificates/acme-v02.api.letsencrypt.org-directory/" + domain + "/"
+			certPath := basePath + domain + ".crt"
+			keyPath := basePath + domain + ".key"
+
+			if _, err := os.Stat(certPath); err == nil {
+				config.CertFile = certPath
+				config.KeyFile = keyPath
+				fmt.Printf("Auto-detected Caddy certificates for %s\n", domain)
+			}
+		}
 	}
 
 	if pStr := os.Getenv("PROXY_PORT"); pStr != "" {

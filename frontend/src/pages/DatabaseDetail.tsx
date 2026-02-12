@@ -460,30 +460,32 @@ export default function DatabaseDetail() {
                 </DialogHeader>
                 <div className="mt-4">
                   {canUseDomain && (
-                    <div className="flex items-center justify-between mb-4 p-3 bg-neutral-800/50 rounded-lg border border-border">
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-neutral-200">
-                            Use Domain Name
-                          </span>
-                          <span className="text-xs text-neutral-500">
-                            Connect via {currentHostname} instead of IP
-                          </span>
+                    <>
+                      <div className="flex items-center justify-between mb-4 p-3 bg-neutral-800/50 rounded-lg border border-border">
+                        <div className="flex items-center gap-3">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-neutral-200">
+                              Use Domain Name
+                            </span>
+                            <span className="text-xs text-neutral-500">
+                              Connect via {currentHostname} instead of IP
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <button
-                        onClick={() => setUseDomain(!useDomain)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          useDomain ? "bg-blue-600" : "bg-neutral-600"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            useDomain ? "translate-x-6" : "translate-x-1"
+                        <button
+                          onClick={() => setUseDomain(!useDomain)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            useDomain ? "bg-blue-600" : "bg-neutral-600"
                           }`}
-                        />
-                      </button>
-                    </div>
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              useDomain ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   <div className="flex items-center justify-between mb-4 p-3 bg-neutral-800/50 rounded-lg border border-border">
@@ -493,19 +495,24 @@ export default function DatabaseDetail() {
                           SSL/TLS Encryption
                         </span>
                         <span className="text-xs text-neutral-500">
-                          Use encrypted connection to the database
+                          {useDomain
+                            ? "Encrypted connection via domain certificate"
+                            : "Use encrypted connection to the database"}
                         </span>
                       </div>
                     </div>
                     <button
                       onClick={() => setUseSSL(!useSSL)}
+                      disabled={useDomain}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        useSSL ? "bg-green-600" : "bg-neutral-600"
-                      }`}
+                        useSSL || useDomain ? "bg-green-600" : "bg-neutral-600"
+                      } ${useDomain ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                       <span
                         className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          useSSL ? "translate-x-6" : "translate-x-1"
+                          useSSL || useDomain
+                            ? "translate-x-6"
+                            : "translate-x-1"
                         }`}
                       />
                     </button>
