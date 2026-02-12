@@ -182,7 +182,7 @@ export default function Sidebar() {
 
   return (
     <div className="w-72 p-2 flex flex-col h-full">
-      {!isUpdating && <AuroraOverlay />}
+      {isUpdating && <AuroraOverlay />}
       <div className="mb-6 flex flex-row items-center justify-between">
         {/* Combined Project/Database Selector */}
         <Popover open={selectorOpen} onOpenChange={setSelectorOpen}>
