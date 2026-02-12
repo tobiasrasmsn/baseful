@@ -70,6 +70,18 @@ export default function Sidebar() {
       try {
         const res = await fetch("/api/system/update-status");
         const data = await res.json();
+
+        // If we just finished an update (detected by localStorage),
+        // force available to false until a new check happens
+        if (
+          localStorage.getItem("baseful_is_updating") === "true" &&
+          !data.updatingStatus
+        ) {
+          data.available = false;
+          localStorage.removeItem("baseful_is_updating");
+          setIsUpdating(false);
+        }
+
         setUpdateStatus(data);
       } catch (e) {
         console.error("Failed to check for updates");
@@ -92,7 +104,12 @@ export default function Sidebar() {
             data.currentHash !== updateStatus?.currentHash &&
             updateStatus?.currentHash
           ) {
-            window.location.reload();
+            setIsUpdating(false);
+            localStorage.removeItem("baseful_is_updating");
+            // Force available to false in local state to hide banner immediately
+            setUpdateStatus({ ...data, available: false });
+            setTimeout(() => window.location.reload(), 500);
+            return;
           }
 
           setUpdateStatus(data);
