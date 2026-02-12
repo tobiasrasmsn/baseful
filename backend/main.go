@@ -1477,6 +1477,11 @@ func main() {
 			db.CreateToken(dbID, tokenID, tokenHash, expiresAt)
 
 			proxyHost := auth.GetProxyHost()
+			if proxyHost == "localhost" || proxyHost == "0.0.0.0" {
+				if publicIP, err := system.GetPublicIP(); err == nil {
+					proxyHost = publicIP
+				}
+			}
 			proxyPort := auth.GetProxyPort()
 			portInt, _ := strconv.Atoi(proxyPort)
 			connectionString := auth.GenerateConnectionString(jwtToken, dbID, proxyHost, portInt, sslMode)
@@ -1499,6 +1504,11 @@ func main() {
 		}
 
 		proxyHost := auth.GetProxyHost()
+		if proxyHost == "localhost" || proxyHost == "0.0.0.0" {
+			if publicIP, err := system.GetPublicIP(); err == nil {
+				proxyHost = publicIP
+			}
+		}
 		proxyPort := auth.GetProxyPort()
 		portInt, _ := strconv.Atoi(proxyPort)
 		connectionString := auth.GenerateConnectionString(jwtToken, dbID, proxyHost, portInt, sslMode)
