@@ -32,7 +32,6 @@ interface WebServerStatus {
 }
 
 export default function WebServer() {
-  const { id } = useParams();
   const [status, setStatus] = useState<WebServerStatus | null>(null);
   const [domainInput, setDomainInput] = useState("");
   const [loading, setLoading] = useState(true);

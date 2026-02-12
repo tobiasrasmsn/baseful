@@ -7,7 +7,6 @@ import {
   CheckCircle,
   WarningCircleIcon,
   CopyIcon,
-  ArrowSquareOutIcon,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { SquareArrowOutUpRight } from "lucide-react";
@@ -38,12 +37,6 @@ export default function DomainSetup() {
     };
     fetchDomainStatus();
   }, []);
-
-  const copyIP = () => {
-    navigator.clipboard.writeText(domainStatus?.domain || "");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const currentIP =
     typeof window !== "undefined" ? window.location.hostname : "";

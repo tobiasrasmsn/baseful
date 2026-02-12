@@ -18,7 +18,7 @@ interface Database {
 
 export default function Monitoring() {
   const { id } = useParams<{ id: string }>();
-  const [database, setDatabase] = useState<Database | null>(null);
+  const [, setDatabase] = useState<Database | null>(null);
   const [settings, setSettings] = useState<MonitoringSettings>({
     metrics_enabled: true,
     metrics_sample_rate: "5",
