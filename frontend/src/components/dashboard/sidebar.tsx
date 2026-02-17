@@ -12,6 +12,7 @@ import {
   TerminalIcon,
   ArrowClockwise,
   SpinnerIcon,
+  LockIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -567,6 +568,32 @@ export default function Sidebar() {
                 >
                   <Globe size={18} weight="bold" className="text-neutral-400" />
                   <span>Web Server</span>
+                </Link>
+              </li>
+              <li
+                className={`py-1.5 px-2.5 rounded-md ${
+                  location.pathname ===
+                  (selectedDatabase
+                    ? `/db/${selectedDatabase.id}/security`
+                    : "/")
+                    ? "bg-muted/50"
+                    : ""
+                }`}
+              >
+                <Link
+                  to={
+                    selectedDatabase
+                      ? `/db/${selectedDatabase.id}/security`
+                      : "/"
+                  }
+                  className="text-neutral-100 text-sm flex flex-row items-center gap-2"
+                >
+                  <LockIcon
+                    size={18}
+                    weight="bold"
+                    className="text-neutral-400"
+                  />
+                  <span>Security</span>
                 </Link>
               </li>
             </ul>
