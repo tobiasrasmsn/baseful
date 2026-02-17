@@ -8,5 +8,5 @@ export default function Home() {
       .then((res) => res.json())
       .then((data) => setMessage(data.message));
   }, []);
-  return <div className="">{message}</div>;
+  return <div className="p-12">{message}</div>;
 }

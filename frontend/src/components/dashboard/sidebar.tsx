@@ -235,7 +235,7 @@ export default function Sidebar() {
                 enableBlink={true}
               />
               <div className="flex flex-col">
-                <h2 className="text-sm font-medium">
+                <h2 className="text-sm font-medium text-nowrap">
                   {getSelectorDisplayText()}
                 </h2>
               </div>
@@ -249,7 +249,7 @@ export default function Sidebar() {
           <PopoverContent className="w-64 max-h-96 overflow-y-auto p-2 pb-0 pt-4 ml-2">
             <div className="flex flex-col gap-2">
               {(databases || []).length === 0 ? (
-                <div className="text-sm text-neutral-500">
+                <div className="text-sm text-neutral-500 px-2 pb-4">
                   No databases yet. Create one to get started.
                 </div>
               ) : (

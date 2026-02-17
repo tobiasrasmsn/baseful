@@ -10,7 +10,9 @@ import Containers from "./pages/Containers";
 import Monitoring from "./pages/Monitoring";
 import WebServer from "./pages/WebServer";
 import Branches from "./pages/branches/Branches";
+import Backup from "./pages/Backup";
 import Sidebar from "./components/dashboard/sidebar";
+import MobileDock from "./components/dashboard/MobileDock";
 import { ThemeProvider } from "./components/theme-provider";
 import { DatabaseProvider } from "./context/DatabaseContext";
 import { ProjectProvider } from "./context/ProjectContext";
@@ -22,10 +24,13 @@ function App() {
         <ProjectProvider>
           <DatabaseProvider>
             <div className="bg-background h-dvh w-full flex flex-row">
-              <Sidebar />
+              {/* Desktop Sidebar - hidden on mobile */}
+              <div className="hidden md:block">
+                <Sidebar />
+              </div>
 
-              <main className="p-2 bg-background flex h-full w-full">
-                <div className="bg-card/75 overflow-y-auto border border-border rounded-md h-full w-full">
+              <main className="p-2 bg-background flex h-full flex-1 min-w-0 pb-2">
+                <div className="bg-card/75 overflow-y-auto overflow-x-hidden border border-border rounded-md h-full w-full">
                   <Routes>
                     <Route path="/" element={<Home />} />
                     <Route path="/about" element={<About />} />
@@ -52,10 +57,13 @@ function App() {
                     <Route path="/db/:id/tables" element={<Tables />} />
                     <Route path="/db/:id/containers" element={<Containers />} />
                     <Route path="/db/:id/web-server" element={<WebServer />} />
-                    <Route path="/db/:id/backup" element={<DatabaseDetail />} />
+                    <Route path="/db/:id/backup" element={<Backup />} />
                   </Routes>
                 </div>
               </main>
+
+              {/* Mobile Dock - hidden on desktop */}
+              <MobileDock />
             </div>
           </DatabaseProvider>
         </ProjectProvider>

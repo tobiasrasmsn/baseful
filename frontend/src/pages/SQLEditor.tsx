@@ -4,8 +4,23 @@ import {
   PlayIcon,
   TableIcon,
   TrashIcon,
+  ClockCounterClockwise,
+  CheckIcon,
+  CopyIcon,
 } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
+import { Facehash } from "facehash";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import Editor from "react-simple-code-editor";
+import { highlight, languages } from "prismjs";
+import "prismjs/components/prism-sql";
+import "prismjs/themes/prism-tomorrow.css";
 
 interface QueryResult {
   result: string;
@@ -27,7 +42,7 @@ export default function SQLEditor() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<QueryHistory[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const runQuery = async () => {
     if (!query.trim()) return;
@@ -47,15 +62,14 @@ export default function SQLEditor() {
         body: JSON.stringify({ query }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || "Query failed");
       }
 
-      const data = await res.json();
       setResult(data);
 
-      // Add to history
       setHistory((prev) => [
         {
           id: Date.now(),
@@ -63,12 +77,10 @@ export default function SQLEditor() {
           timestamp: new Date(),
           success: true,
         },
-        ...prev.slice(0, 49), // Keep last 50 queries
+        ...prev.slice(0, 49),
       ]);
     } catch (err: any) {
       setError(err.message);
-
-      // Add failed query to history
       setHistory((prev) => [
         {
           id: Date.now(),
@@ -83,13 +95,13 @@ export default function SQLEditor() {
     }
   };
 
-  const clearHistory = () => {
-    setHistory([]);
-  };
+  const clearHistory = () => setHistory([]);
 
-  const loadFromHistory = (h: QueryHistory) => {
-    setQuery(h.query);
-    setShowHistory(false);
+  const copyResults = () => {
+    if (!result?.result) return;
+    navigator.clipboard.writeText(result.result);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const formatResult = (
@@ -98,13 +110,10 @@ export default function SQLEditor() {
     const lines = output.trim().split("\n");
     if (lines.length < 2) return null;
 
-    // Check if it's a table output (PostgreSQL format)
-    if (lines[0].includes("(") || lines[0].startsWith("-")) {
-      // Parse table output
+    if (lines[0].includes("|") || lines[1]?.startsWith("-")) {
       let headers: string[] = [];
       const rows: string[][] = [];
 
-      // Find the header line (contains column names)
       let headerIndex = -1;
       for (let i = 0; i < lines.length; i++) {
         if (lines[i].includes("|") && !lines[i].startsWith("(")) {
@@ -115,13 +124,11 @@ export default function SQLEditor() {
 
       if (headerIndex === -1) return null;
 
-      // Parse header
       headers = lines[headerIndex]
         .split("|")
         .map((h) => h.trim())
         .filter((h) => h);
 
-      // Parse rows (skip separator line)
       for (let i = headerIndex + 1; i < lines.length; i++) {
         if (
           lines[i].includes("|") &&
@@ -144,175 +151,366 @@ export default function SQLEditor() {
   const tableData = result ? formatResult(result.result) : null;
 
   return (
-    <div className="flex flex-col gap-4 h-full">
-      {/* Header */}
-      <div className="flex flex-row border-b border-border p-4 items-center gap-4 w-full">
+    <div className="flex flex-col h-full max-w-full overflow-x-hidden">
+      {/* Refined Header */}
+      <div className="flex flex-row border-b border-border p-4 items-center justify-between bg-neutral-900/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex flex-row items-center gap-3 flex-1">
+          <Facehash
+            name={selectedDatabase?.name || "database"}
+            className="rounded-sm"
+            colorClasses={[
+              "bg-blue-500",
+              "bg-orange-500",
+              "bg-purple-500",
+              "bg-lime-500",
+              "bg-indigo-500",
+              "bg-pink-500",
+              "bg-teal-500",
+              "bg-yellow-500",
+              "bg-sky-500",
+              "bg-fuchsia-500",
+              "bg-rose-500",
+              "bg-green-500",
+            ]}
+            size={32}
+          />
           <div className="flex flex-row items-center gap-2">
             <h1 className="text-2xl font-medium text-neutral-100">
               SQL Editor
             </h1>
           </div>
         </div>
-      </div>
 
-      {showHistory && (
-        <div className="bg-card border border-border rounded-lg p-4 max-h-48 overflow-y-auto">
-          <div className="flex flex-row items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-neutral-300">
-              Query History
-            </h3>
-            <button
-              onClick={clearHistory}
-              className="text-xs text-red-400 hover:text-red-300"
+        <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs border-border bg-neutral-900/50 hover:bg-neutral-800"
+              >
+                <ClockCounterClockwise size={14} />
+                History
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-80 p-0 overflow-hidden bg-card border-border"
+              align="end"
             >
-              Clear
-            </button>
-          </div>
-          {history.length === 0 ? (
-            <p className="text-sm text-neutral-500">No queries yet</p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {history.map((h) => (
-                <li
-                  key={h.id}
-                  onClick={() => loadFromHistory(h)}
-                  className="text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 p-1.5 rounded cursor-pointer truncate"
+              <div className="p-3 border-b border-border flex items-center justify-between">
+                <span className="text-xs font-semibold text-neutral-400">
+                  Query History
+                </span>
+                <button
+                  onClick={clearHistory}
+                  className="text-[10px] text-neutral-500 hover:text-red-400 transition-colors uppercase font-bold tracking-wider"
                 >
-                  <span
-                    className={h.success ? "text-green-400" : "text-red-400"}
-                  >
-                    {h.success ? "✓" : "✗"}
-                  </span>{" "}
-                  {h.query.substring(0, 80)}
-                  {h.query.length > 80 ? "..." : ""}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+                  Clear
+                </button>
+              </div>
+              <div className="max-h-[300px] overflow-y-auto">
+                {history.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <p className="text-xs text-neutral-600 font-medium">
+                      No recent queries
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col divide-y divide-border/50">
+                    {history.map((h) => (
+                      <button
+                        key={h.id}
+                        onClick={() => setQuery(h.query)}
+                        className="p-3 text-left hover:bg-neutral-800/50 transition-colors group"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span
+                            className={cn(
+                              "text-[10px] px-1 rounded-sm border",
+                              h.success
+                                ? "text-green-400 border-green-500/20 bg-green-500/5"
+                                : "text-red-400 border-red-500/20 bg-red-500/5",
+                            )}
+                          >
+                            {h.success ? "SUCCESS" : "FAILED"}
+                          </span>
+                          <span className="text-[9px] text-neutral-600 font-mono">
+                            {h.timestamp.toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <p className="text-xs text-neutral-400 font-mono line-clamp-2 leading-relaxed group-hover:text-neutral-200">
+                          {h.query}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
 
-      <div className="flex-1 flex flex-col gap-2 min-h-0 p-12">
-        <div className="flex-1 bg-card border border-border rounded-lg overflow-hidden">
-          <textarea
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="-- Enter your SQL query here
-SELECT * FROM users LIMIT 10;"
-            className="w-full h-full p-4 bg-transparent text-neutral-100 font-mono text-sm resize-none outline-none"
-            spellCheck={false}
-          />
-        </div>
-
-        <div className="flex flex-row items-center gap-2">
-          <button
-            onClick={runQuery}
-            disabled={
-              loading ||
-              !selectedDatabase ||
-              selectedDatabase.status !== "active"
-            }
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors"
-          >
-            <PlayIcon weight="bold" />
-            {loading ? "Running..." : "Run Query"}
-          </button>
-          <button
-            onClick={() => setQuery("")}
-            className="flex items-center gap-2 px-3 py-2 bg-card hover:bg-accent border border-border text-neutral-300 rounded-md text-sm font-medium transition-colors"
-          >
-            <TrashIcon weight="bold" />
-            Clear
-          </button>
-          <button
-            onClick={() =>
-              setQuery(
-                "-- Sample queries\n\n-- List all tables\nSELECT * FROM information_schema.tables WHERE table_schema = 'public';\n\n-- List all columns in a table\nSELECT * FROM information_schema.columns WHERE table_name = 'your_table';",
-              )
-            }
-            className="flex items-center gap-2 px-3 py-2 bg-card hover:bg-accent border border-border text-neutral-300 rounded-md text-sm font-medium transition-colors"
-          >
-            <TableIcon weight="bold" />
-            Templates
-          </button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs border-border bg-neutral-900/50 hover:bg-neutral-800"
+              >
+                <TableIcon size={14} />
+                Templates
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-64 p-2 bg-card border-border"
+              align="end"
+            >
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() =>
+                    setQuery(
+                      "SELECT * FROM information_schema.tables WHERE table_schema = 'public';",
+                    )
+                  }
+                  className="p-2 text-left text-xs text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded transition-colors"
+                >
+                  List all tables
+                </button>
+                <button
+                  onClick={() =>
+                    setQuery(
+                      "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'users';",
+                    )
+                  }
+                  className="p-2 text-left text-xs text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded transition-colors"
+                >
+                  List table columns
+                </button>
+                <button
+                  onClick={() =>
+                    setQuery(
+                      "SELECT pg_size_pretty(pg_database_size(current_database()));",
+                    )
+                  }
+                  className="p-2 text-left text-xs text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded transition-colors"
+                >
+                  Database size
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      {error && (
-        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-md text-sm">
-          {error}
-        </div>
-      )}
-
-      {result && (
-        <div className="p-12">
-          <div className="flex-1 bg-card border border-border rounded-lg overflow-hidden flex flex-col min-h-0">
-            <div className="p-3 border-b border-border bg-neutral-800/50">
-              <h3 className="text-sm font-medium text-neutral-300">Results</h3>
+      <div className="flex-1 flex flex-col min-h-0 max-w-full overflow-hidden divide-y divide-border">
+        {/* Editor Area */}
+        <div className="flex-[0.4] flex flex-col bg-card min-h-[200px]">
+          <div className="flex items-center justify-between px-4 py-2 bg-neutral-900/30 border-b border-border/50">
+            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
+              Editor
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setQuery("")}
+                className="text-[10px] text-neutral-500 hover:text-neutral-300 font-semibold flex items-center gap-1 transition-colors"
+              >
+                <TrashIcon size={12} />
+                CLEAR
+              </button>
+              <div className="w-[1px] h-3 bg-border mx-1" />
+              <button
+                onClick={runQuery}
+                disabled={
+                  loading ||
+                  !selectedDatabase ||
+                  selectedDatabase.status !== "active"
+                }
+                className="text-[10px] text-green-500 hover:text-green-400 font-bold flex items-center gap-1 transition-colors disabled:opacity-50"
+              >
+                <PlayIcon size={12} weight="fill" />
+                {loading ? "RUNNING..." : "EXECUTE"}
+              </button>
             </div>
-            <div className="flex-1 overflow-auto p-3">
-              {tableData ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        {tableData.headers.map((header, i) => (
-                          <th
-                            key={i}
-                            className="text-left py-2 px-3 text-neutral-400 font-medium"
-                          >
-                            {header}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableData.rows.map((row, i) => (
-                        <tr
-                          key={i}
-                          className="border-b border-border/50 hover:bg-neutral-800/50"
-                        >
-                          {row.map((cell, j) => (
-                            <td
-                              key={j}
-                              className="py-2 px-3 text-neutral-200 font-mono text-xs"
-                            >
-                              {cell || "NULL"}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <p className="text-xs text-neutral-500 mt-2">
-                    {tableData.rows.length} row
-                    {tableData.rows.length !== 1 ? "s" : ""} returned
-                  </p>
-                </div>
-              ) : (
-                <pre className="text-sm text-neutral-300 font-mono whitespace-pre-wrap">
-                  {result.result}
-                </pre>
+          </div>
+          <div className="flex-1 relative group overflow-auto">
+            <Editor
+              value={query}
+              onValueChange={setQuery}
+              highlight={(code) => highlight(code, languages.sql, "sql")}
+              padding={16}
+              placeholder="-- Write your SQL here..."
+              className="w-full h-full bg-transparent text-neutral-200 font-mono text-sm outline-none leading-relaxed"
+              style={{
+                fontFamily: '"Fira Code", "Courier New", monospace',
+                minHeight: "100%",
+              }}
+              textareaClassName="outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Results Area */}
+        <div className="flex-[0.6] flex flex-col bg-neutral-900/20 min-h-0">
+          <div className="flex items-center justify-between px-4 py-2 bg-neutral-900/30 border-b border-border/50">
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
+                Result
+              </span>
+              {tableData && (
+                <span className="text-[10px] text-neutral-600 font-medium">
+                  {tableData.rows.length} row
+                  {tableData.rows.length !== 1 ? "s" : ""}
+                </span>
               )}
             </div>
+            {result && (
+              <button
+                onClick={copyResults}
+                className="text-[10px] text-neutral-500 hover:text-neutral-300 font-semibold flex items-center gap-1 transition-colors"
+                title="Copy raw output"
+              >
+                {copied ? (
+                  <CheckIcon size={12} className="text-green-500" />
+                ) : (
+                  <CopyIcon size={12} />
+                )}
+                {copied ? "COPIED" : "COPY"}
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-auto">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3 opacity-50">
+                <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-400 rounded-full animate-spin" />
+                <span className="text-xs text-neutral-500 font-medium animate-pulse">
+                  Executing query...
+                </span>
+              </div>
+            ) : error ? (
+              <div className="p-8">
+                <div className="bg-red-500/5 border border-red-500/10 rounded-lg p-6 max-w-2xl mx-auto">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 bg-red-500/10 rounded border border-red-500/20 text-red-500">
+                      <TrashIcon size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-red-400 mb-1">
+                        Query Failed
+                      </h3>
+                      <p className="text-xs text-red-400/70 font-mono break-all leading-relaxed">
+                        {error}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : tableData ? (
+              <div className="overflow-x-auto h-full">
+                <table className="w-full text-left border-separate border-spacing-0">
+                  <thead className="sticky top-0 z-10 bg-card">
+                    <tr>
+                      {tableData.headers.map((header, i) => (
+                        <th
+                          key={i}
+                          className="px-4 py-2 border-b border-border text-[11px] font-bold text-neutral-500 uppercase tracking-wider whitespace-nowrap bg-neutral-900/80 backdrop-blur-sm"
+                        >
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableData.rows.map((row, i) => (
+                      <tr key={i} className="hover:bg-neutral-800/30 group">
+                        {row.map((cell, j) => (
+                          <td
+                            key={j}
+                            className="px-4 py-2 border-b border-border/30 text-xs font-mono text-neutral-300 whitespace-nowrap transition-colors"
+                          >
+                            {cell === "" || cell === null ? (
+                              <span className="text-neutral-700 italic">
+                                NULL
+                              </span>
+                            ) : (
+                              cell
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : result ? (
+              <div className="p-4">
+                <pre className="text-xs font-mono text-neutral-400 whitespace-pre-wrap leading-relaxed bg-card p-4 rounded border border-border/50">
+                  {result.result}
+                </pre>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full px-12 text-center gap-4">
+                <div className="max-w-[240px]">
+                  <p className="text-sm font-semibold text-neutral-400 mb-1">
+                    No output yet
+                  </p>
+                  <p className="text-xs text-neutral-600 leading-relaxed">
+                    Write a query in the editor above and press execute to see
+                    results.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {!selectedDatabase && (
-        <div className="flex-1 flex items-center justify-center bg-card border border-border rounded-lg">
-          <p className="text-neutral-400">
-            Select a database from the sidebar to run queries
-          </p>
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-50 flex items-center justify-center">
+          <div className="bg-card border border-border rounded-xl p-8 max-w-sm text-center shadow-2xl">
+            <div className="w-12 h-12 bg-neutral-900 rounded-lg border border-border mx-auto mb-4 flex items-center justify-center">
+              <Facehash name="none" size={24} />
+            </div>
+            <h3 className="text-base font-semibold text-neutral-100 mb-2">
+              No database selected
+            </h3>
+            <p className="text-xs text-neutral-500 leading-relaxed mb-6">
+              Please select a database from the sidebar to start writing and
+              executing SQL queries.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs font-bold border-border"
+              onClick={() => window.history.back()}
+            >
+              Go Back
+            </Button>
+          </div>
         </div>
       )}
 
       {selectedDatabase && selectedDatabase.status !== "active" && (
-        <div className="flex-1 flex items-center justify-center bg-card border border-border rounded-lg">
-          <p className="text-amber-400">
-            Database is not running. Start it to run queries.
-          </p>
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-50 flex items-center justify-center">
+          <div className="bg-card border border-border rounded-xl p-8 max-w-sm text-center shadow-2xl">
+            <div className="w-12 h-12 bg-amber-500/10 rounded-lg border border-amber-500/20 mx-auto mb-4 flex items-center justify-center">
+              <PlayIcon size={24} className="text-amber-500" />
+            </div>
+            <h3 className="text-base font-semibold text-neutral-100 mb-2">
+              Database is offline
+            </h3>
+            <p className="text-xs text-neutral-500 leading-relaxed mb-6">
+              The database "{selectedDatabase.name}" is currently{" "}
+              {selectedDatabase.status}. Start it to use the SQL editor.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs font-bold border-border"
+              onClick={() => window.history.back()}
+            >
+              Go Back
+            </Button>
+          </div>
         </div>
       )}
     </div>

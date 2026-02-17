@@ -428,6 +428,14 @@ export default function DatabaseDetail() {
                     {actionLoading === "restart" ? "Reloading..." : "Reload"}
                   </Button>
                   <Button
+                    onClick={() => handleAction("vacuum")}
+                    variant={"secondary"}
+                    className="cursor-pointer"
+                    disabled={actionLoading !== null || database?.status !== "active"}
+                  >
+                    {actionLoading === "vacuum" ? "Vacuuming..." : "Vacuum"}
+                  </Button>
+                  <Button
                     onClick={() => handleAction("delete")}
                     className="cursor-pointer"
                     variant={"destructive"}
