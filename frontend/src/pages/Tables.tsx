@@ -237,8 +237,9 @@ export default function Tables() {
                 <button
                   key={i}
                   onClick={() => fetchTableData(table.name)}
-                  className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${selectedTableName === table.name ? "bg-muted/75" : ""
-                    }`}
+                  className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${
+                    selectedTableName === table.name ? "bg-muted/75" : ""
+                  }`}
                 >
                   <div className="flex flex-row items-center gap-2">
                     <TableIcon
@@ -250,10 +251,11 @@ export default function Tables() {
                       }
                     />
                     <span
-                      className={`text-base ${selectedTableName === table.name
+                      className={`text-base ${
+                        selectedTableName === table.name
                           ? "text-neutral-100"
                           : "text-neutral-200"
-                        }`}
+                      }`}
                     >
                       {table.name}
                     </span>
@@ -349,8 +351,9 @@ export default function Tables() {
                                     return (
                                       <td
                                         key={j}
-                                        className={`py-2 px-4 font-mono text-xs max-w-xs truncate border-l border-transparent ${isEdited ? "" : ""
-                                          }`}
+                                        className={`py-2 px-4 font-mono text-xs max-w-xs truncate border-l border-transparent ${
+                                          isEdited ? "" : ""
+                                        }`}
                                         onDoubleClick={() =>
                                           handleCellDoubleClick(
                                             i,
@@ -371,8 +374,9 @@ export default function Tables() {
                                               e.target.value,
                                             )
                                           }
-                                          className={`w-full bg-transparent border-none outline-none text-neutral-200 placeholder-neutral-600 ${isEdited ? "text-blue-200" : ""
-                                            }`}
+                                          className={`w-full bg-transparent border-none outline-none text-neutral-200 placeholder-neutral-600 ${
+                                            isEdited ? "text-blue-200" : ""
+                                          }`}
                                           placeholder={
                                             value === null ? "NULL" : undefined
                                           }

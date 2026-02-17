@@ -315,9 +315,71 @@ func main() {
 		go func() {
 			fmt.Printf("Starting restore for DB %d from backup %d...\n", id, backupId)
 			if err := backups.RestoreBackup(id, backupId); err != nil {
-				fmt.Printf("Restore failed for DB %d: %v\n", id, err)
+				fmt.Printf("Restore failed for DB %d: %v\n", id, backupId)
 			} else {
 				fmt.Printf("Restore completed for DB %d\n", id)
+			}
+		}()
+		c.JSON(200, gin.H{"message": "Restore started"})
+	})
+
+	// Restore from uploaded file
+	r.POST("/api/databases/:id/restore/file", func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+
+		file, header, err := c.Request.FormFile("file")
+		if err != nil {
+			c.JSON(400, gin.H{"error": "No file uploaded"})
+			return
+		}
+		defer file.Close()
+
+		fmt.Printf("Starting restore for DB %d from uploaded file: %s\n", id, header.Filename)
+
+		go func() {
+			if err := backups.RestoreFromFile(id, file); err != nil {
+				fmt.Printf("Restore from file failed for DB %d: %v\n", id, err)
+			} else {
+				fmt.Printf("Restore from file completed for DB %d\n", id)
+			}
+		}()
+		c.JSON(200, gin.H{"message": "Restore started"})
+	})
+
+	// Restore from external connection
+	r.POST("/api/databases/:id/restore/connection", func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+
+		var req struct {
+			ConnectionString string `json:"connection_string"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		if req.ConnectionString == "" {
+			c.JSON(400, gin.H{"error": "Connection string is required"})
+			return
+		}
+
+		fmt.Printf("Starting restore for DB %d from external connection\n", id)
+
+		go func() {
+			if err := backups.RestoreFromConnection(id, req.ConnectionString); err != nil {
+				fmt.Printf("Restore from connection failed for DB %d: %v\n", id, err)
+			} else {
+				fmt.Printf("Restore from connection completed for DB %d\n", id)
 			}
 		}()
 		c.JSON(200, gin.H{"message": "Restore started"})

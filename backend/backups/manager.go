@@ -440,3 +440,216 @@ func RestoreBackup(databaseID int, backupID int) error {
 
 	return nil
 }
+
+// RestoreFromFile restores a database from an uploaded SQL file
+func RestoreFromFile(databaseID int, fileContent io.Reader) error {
+	// 1. Get Database Info
+	var dbName, containerID string
+	err := db.DB.QueryRow("SELECT name, container_id FROM databases WHERE id = ?", databaseID).Scan(&dbName, &containerID)
+	if err != nil {
+		return fmt.Errorf("database not found: %w", err)
+	}
+
+	// 2. Docker Client
+	ctx := context.Background()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return fmt.Errorf("failed to create docker client: %w", err)
+	}
+	defer cli.Close()
+
+	// Helper to exec and check
+	execPsql := func(sqlCmd string, stepName string) error {
+		fullCmd := fmt.Sprintf(`psql -U postgres -d postgres -c "%s"`, sqlCmd)
+		execConfig := container.ExecOptions{
+			Cmd:          []string{"/bin/sh", "-c", fullCmd},
+			AttachStdout: true,
+			AttachStderr: true,
+		}
+		execID, err := cli.ContainerExecCreate(ctx, containerID, execConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create %s exec: %w", stepName, err)
+		}
+		resp, err := cli.ContainerExecAttach(ctx, execID.ID, container.ExecStartOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to attach %s exec: %v", stepName, err)
+		}
+		defer resp.Close()
+
+		var outBuf strings.Builder
+		_, _ = io.Copy(&outBuf, resp.Reader)
+
+		inspect, err := cli.ContainerExecInspect(ctx, execID.ID)
+		if err != nil {
+			return fmt.Errorf("failed to inspect %s exec: %v", stepName, err)
+		}
+		if inspect.ExitCode != 0 {
+			return fmt.Errorf("failed during %s (exit %d): %s", stepName, inspect.ExitCode, outBuf.String())
+		}
+		return nil
+	}
+
+	// 3. Terminate Connections
+	terminateCmd := fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s' AND pid <> pg_backend_pid();", dbName)
+	if err := execPsql(terminateCmd, "terminate connections"); err != nil {
+		return err
+	}
+
+	// 4. Drop Database
+	dropCmd := fmt.Sprintf("DROP DATABASE IF EXISTS \\\"%s\\\";", dbName)
+	if err := execPsql(dropCmd, "drop database"); err != nil {
+		return err
+	}
+
+	// 5. Create Database
+	createCmd := fmt.Sprintf("CREATE DATABASE \\\"%s\\\";", dbName)
+	if err := execPsql(createCmd, "create database"); err != nil {
+		return err
+	}
+
+	// 6. Restore from file
+	execConfigRestore := container.ExecOptions{
+		Cmd:          []string{"psql", "-U", "postgres", "-d", dbName},
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execIDRestore, err := cli.ContainerExecCreate(ctx, containerID, execConfigRestore)
+	if err != nil {
+		return fmt.Errorf("failed to create restore exec: %w", err)
+	}
+
+	respRestore, err := cli.ContainerExecAttach(ctx, execIDRestore.ID, container.ExecStartOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to attach restore exec: %v", err)
+	}
+	defer respRestore.Close()
+
+	go func() {
+		_, copyErr := io.Copy(respRestore.Conn, fileContent)
+		if copyErr != nil {
+			log.Printf("Error piping file to docker: %v", copyErr)
+		}
+		respRestore.CloseWrite()
+	}()
+
+	var restoreOutBuf strings.Builder
+	_, copyErr := io.Copy(&restoreOutBuf, respRestore.Reader)
+	if copyErr != nil {
+		log.Printf("Error reading restore output: %v", copyErr)
+	}
+
+	inspectRestore, err := cli.ContainerExecInspect(ctx, execIDRestore.ID)
+	if err != nil {
+		return fmt.Errorf("failed to inspect restore exec: %w", err)
+	}
+	if inspectRestore.ExitCode != 0 {
+		return fmt.Errorf("restore failed with exit code %d: %s", inspectRestore.ExitCode, restoreOutBuf.String())
+	}
+
+	return nil
+}
+
+// RestoreFromConnection restores a database from an external PostgreSQL connection
+func RestoreFromConnection(databaseID int, connectionString string) error {
+	// 1. Get Database Info
+	var dbName, containerID string
+	err := db.DB.QueryRow("SELECT name, container_id FROM databases WHERE id = ?", databaseID).Scan(&dbName, &containerID)
+	if err != nil {
+		return fmt.Errorf("database not found: %w", err)
+	}
+
+	// 2. Docker Client
+	ctx := context.Background()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return fmt.Errorf("failed to create docker client: %w", err)
+	}
+	defer cli.Close()
+
+	// Helper to exec and check
+	execPsql := func(sqlCmd string, stepName string) error {
+		fullCmd := fmt.Sprintf(`psql -U postgres -d postgres -c "%s"`, sqlCmd)
+		execConfig := container.ExecOptions{
+			Cmd:          []string{"/bin/sh", "-c", fullCmd},
+			AttachStdout: true,
+			AttachStderr: true,
+		}
+		execID, err := cli.ContainerExecCreate(ctx, containerID, execConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create %s exec: %w", stepName, err)
+		}
+		resp, err := cli.ContainerExecAttach(ctx, execID.ID, container.ExecStartOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to attach %s exec: %v", stepName, err)
+		}
+		defer resp.Close()
+
+		var outBuf strings.Builder
+		_, _ = io.Copy(&outBuf, resp.Reader)
+
+		inspect, err := cli.ContainerExecInspect(ctx, execID.ID)
+		if err != nil {
+			return fmt.Errorf("failed to inspect %s exec: %v", stepName, err)
+		}
+		if inspect.ExitCode != 0 {
+			return fmt.Errorf("failed during %s (exit %d): %s", stepName, inspect.ExitCode, outBuf.String())
+		}
+		return nil
+	}
+
+	// 3. Terminate Connections
+	terminateCmd := fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s' AND pid <> pg_backend_pid();", dbName)
+	if err := execPsql(terminateCmd, "terminate connections"); err != nil {
+		return err
+	}
+
+	// 4. Drop Database
+	dropCmd := fmt.Sprintf("DROP DATABASE IF EXISTS \\\"%s\\\";", dbName)
+	if err := execPsql(dropCmd, "drop database"); err != nil {
+		return err
+	}
+
+	// 5. Create Database
+	createCmd := fmt.Sprintf("CREATE DATABASE \\\"%s\\\";", dbName)
+	if err := execPsql(createCmd, "create database"); err != nil {
+		return err
+	}
+
+	// 6. Restore from external database using pg_dump | psql
+	// Use plain SQL format (-Fp) instead of custom format (-Fc) to avoid extension/ownership issues
+	restoreCmd := fmt.Sprintf(`pg_dump -Fp "%s" | psql -U postgres -d "%s"`, connectionString, dbName)
+	execConfigRestore := container.ExecOptions{
+		Cmd:          []string{"/bin/sh", "-c", restoreCmd},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execIDRestore, err := cli.ContainerExecCreate(ctx, containerID, execConfigRestore)
+	if err != nil {
+		return fmt.Errorf("failed to create restore exec: %w", err)
+	}
+
+	respRestore, err := cli.ContainerExecAttach(ctx, execIDRestore.ID, container.ExecStartOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to attach restore exec: %v", err)
+	}
+	defer respRestore.Close()
+
+	var restoreOutBuf strings.Builder
+	_, err = io.Copy(&restoreOutBuf, respRestore.Reader)
+	if err != nil {
+		log.Printf("Error reading restore output: %v", err)
+	}
+
+	inspectRestore, err := cli.ContainerExecInspect(ctx, execIDRestore.ID)
+	if err != nil {
+		return fmt.Errorf("failed to inspect restore exec: %w", err)
+	}
+	if inspectRestore.ExitCode != 0 {
+		return fmt.Errorf("restore failed with exit code %d: %s", inspectRestore.ExitCode, restoreOutBuf.String())
+	}
+
+	return nil
+}

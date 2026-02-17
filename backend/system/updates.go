@@ -126,9 +126,9 @@ func RunUpdate() error {
 	go func() {
 		// Wait a second for the response to reach the frontend
 		time.Sleep(1 * time.Second)
-		upCmd := exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "up", "-d", "--remove-orphans")
+		upCmd := exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "up", "-d", "--build", "--remove-orphans")
 		if _, err := upCmd.CombinedOutput(); err != nil {
-			upCmd = exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "up", "-d", "--remove-orphans")
+			upCmd = exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "up", "-d", "--build", "--remove-orphans")
 			upCmd.Run()
 		}
 	}()
