@@ -121,6 +121,44 @@ func InitDB() error {
 		return err
 	}
 
+	// Backup tables
+	backupSchema := `
+	CREATE TABLE IF NOT EXISTS backup_settings (
+		database_id INTEGER PRIMARY KEY,
+		enabled BOOLEAN DEFAULT 0,
+		provider TEXT,
+		endpoint TEXT,
+		region TEXT,
+		bucket TEXT,
+		access_key TEXT,
+		secret_key TEXT,
+		path_prefix TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (database_id) REFERENCES databases(id)
+	);
+
+	CREATE TABLE IF NOT EXISTS backups (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		database_id INTEGER NOT NULL,
+		filename TEXT NOT NULL,
+		object_key TEXT,
+		size_bytes INTEGER,
+		status TEXT, -- 'pending', 'completed', 'failed'
+		s3_url TEXT,
+		error TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (database_id) REFERENCES databases(id)
+	);
+	`
+	_, err = DB.Exec(backupSchema)
+	if err != nil {
+		return err
+	}
+
+	// Migration: Add object_key if not exists
+	DB.Exec("ALTER TABLE backups ADD COLUMN object_key TEXT")
+
 	// Migration: Add project_id column if it doesn't exist
 	// SQLite doesn't support ADD COLUMN IF NOT EXISTS, so we just ignore errors
 	DB.Exec("ALTER TABLE databases ADD COLUMN project_id INTEGER DEFAULT 0")

@@ -26,6 +26,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"baseful/auth"
+	"baseful/backups"
 	"baseful/db"
 	"baseful/docker"
 	"baseful/metrics"
@@ -222,6 +223,104 @@ func main() {
 			return
 		}
 		c.JSON(200, gin.H{"message": "Update initiated successfully. The system will restart in a few moments."})
+	})
+
+	// ========== BACKUPS API ==========
+	r.GET("/api/databases/:id/backups", func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+		list, err := backups.ListBackups(id)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		// If list is nil (empty), return empty array
+		if list == nil {
+			list = []backups.Backup{}
+		}
+		c.JSON(200, list)
+	})
+
+	r.GET("/api/databases/:id/backups/settings", func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+		settings, err := backups.GetBackupSettings(id)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, settings)
+	})
+
+	r.POST("/api/databases/:id/backups/settings", func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+		var settings backups.BackupSettings
+		if err := c.BindJSON(&settings); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid JSON"})
+			return
+		}
+		settings.DatabaseID = id
+		if err := backups.SaveBackupSettings(&settings); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"message": "Settings saved"})
+	})
+
+	r.POST("/api/databases/:id/backups/manual", func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+		go func() {
+			fmt.Printf("Starting manual backup for DB %d...\n", id)
+			if err := backups.PerformBackup(id); err != nil {
+				fmt.Printf("Backup failed for DB %d: %v\n", id, err)
+			} else {
+				fmt.Printf("Backup completed for DB %d\n", id)
+			}
+		}()
+		c.JSON(200, gin.H{"message": "Backup started"})
+	})
+
+	r.POST("/api/databases/:id/backups/:backupId/restore", func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+		backupIdStr := c.Param("backupId")
+		backupId, err := strconv.Atoi(backupIdStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid backup ID"})
+			return
+		}
+
+		go func() {
+			fmt.Printf("Starting restore for DB %d from backup %d...\n", id, backupId)
+			if err := backups.RestoreBackup(id, backupId); err != nil {
+				fmt.Printf("Restore failed for DB %d: %v\n", id, err)
+			} else {
+				fmt.Printf("Restore completed for DB %d\n", id)
+			}
+		}()
+		c.JSON(200, gin.H{"message": "Restore started"})
 	})
 
 	// ========== PROJECTS API ==========
@@ -651,6 +750,29 @@ func main() {
 				return
 			}
 			db.DB.Exec("UPDATE databases SET status = 'active' WHERE id = ?", id)
+		case "vacuum":
+			var dbName string
+			err := db.DB.QueryRow("SELECT name FROM databases WHERE id = ?", id).Scan(&dbName)
+			if err != nil {
+				c.JSON(404, gin.H{"error": "Database not found"})
+				return
+			}
+
+			// Run VACUUM ANALYZE;
+			command := fmt.Sprintf("psql -U postgres -d %s -c \"VACUUM ANALYZE;\"", dbName)
+			res, err := docker.ExecCommand(containerID, command, "/")
+			if err != nil {
+				c.JSON(500, gin.H{"error": "Failed to vacuum database: " + err.Error()})
+				return
+			}
+
+			if strings.Contains(res.Output, "ERROR") {
+				c.JSON(500, gin.H{"error": "PostgreSQL error: " + res.Output})
+				return
+			}
+
+			c.JSON(200, gin.H{"message": "Database vacuumed successfully", "output": res.Output})
+			return
 		case "delete":
 			// Revoke all tokens first
 			dbID, _ := strconv.Atoi(id)
