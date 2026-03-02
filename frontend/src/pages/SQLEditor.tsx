@@ -21,6 +21,7 @@ import Editor from "react-simple-code-editor";
 import { highlight, languages } from "prismjs";
 import "prismjs/components/prism-sql";
 import "prismjs/themes/prism-tomorrow.css";
+import { DitherAvatar } from "@/components/ui/hash-avatar";
 
 interface QueryResult {
   result: string;
@@ -155,25 +156,8 @@ export default function SQLEditor() {
       {/* Refined Header */}
       <div className="flex flex-row border-b border-border p-4 items-center justify-between bg-neutral-900/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex flex-row items-center gap-3 flex-1">
-          <Facehash
-            name={selectedDatabase?.name || "database"}
-            className="rounded-sm"
-            colorClasses={[
-              "bg-blue-500",
-              "bg-orange-500",
-              "bg-purple-500",
-              "bg-lime-500",
-              "bg-indigo-500",
-              "bg-pink-500",
-              "bg-teal-500",
-              "bg-yellow-500",
-              "bg-sky-500",
-              "bg-fuchsia-500",
-              "bg-rose-500",
-              "bg-green-500",
-            ]}
-            size={32}
-          />
+          <DitherAvatar value={selectedDatabase?.name || "database"} size={32} />
+
           <div className="flex flex-row items-center gap-2">
             <h1 className="text-2xl font-medium text-neutral-100">
               SQL Editor
@@ -468,7 +452,7 @@ export default function SQLEditor() {
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-50 flex items-center justify-center">
           <div className="bg-card border border-border rounded-xl p-8 max-w-sm text-center shadow-2xl">
             <div className="w-12 h-12 bg-neutral-900 rounded-lg border border-border mx-auto mb-4 flex items-center justify-center">
-              <Facehash name="none" size={24} />
+              <DitherAvatar value={"database"} size={24} />
             </div>
             <h3 className="text-base font-semibold text-neutral-100 mb-2">
               No database selected

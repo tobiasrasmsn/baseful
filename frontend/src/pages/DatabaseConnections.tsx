@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Facehash } from "facehash";
+import { DitherAvatar } from "@/components/ui/hash-avatar";
 
 interface Connection {
   pid: number;
@@ -145,7 +146,8 @@ export default function DatabaseConnections() {
           </Button>
         </Link>
         <div className="flex items-center gap-3">
-          <Facehash name={database.name} size={32} className="rounded-sm" />
+          <DitherAvatar value={database?.name || "database"} size={32} />
+
           <h1 className="text-2xl font-medium text-neutral-100">
             Connections for {database.name}
           </h1>
@@ -207,11 +209,10 @@ export default function DatabaseConnections() {
                       >
                         <td className="p-4">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${
-                              isSystem
+                            className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${isSystem
                                 ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                                 : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
-                            }`}
+                              }`}
                           >
                             {isSystem ? "System" : "Client"}
                           </span>
@@ -239,11 +240,10 @@ export default function DatabaseConnections() {
                         </td>
                         <td className="p-4">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${
-                              conn.state === "active"
+                            className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${conn.state === "active"
                                 ? "bg-green-500/10 text-green-400 border border-green-500/20"
                                 : "bg-neutral-500/10 text-neutral-400 border border-neutral-500/20"
-                            }`}
+                              }`}
                           >
                             {conn.state || (isSystem ? "background" : "idle")}
                           </span>
@@ -268,8 +268,8 @@ export default function DatabaseConnections() {
                               {conn.query ||
                                 (isSystem
                                   ? getSystemProcessDescription(
-                                      conn.backend_type,
-                                    )
+                                    conn.backend_type,
+                                  )
                                   : "idle")}
                             </code>
                           </div>

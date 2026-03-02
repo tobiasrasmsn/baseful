@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { TableIcon } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
 import { Facehash } from "facehash";
+import { DitherAvatar } from "@/components/ui/hash-avatar";
 
 interface TableInfo {
   name: string;
@@ -186,25 +187,8 @@ export default function Tables() {
       {/* Header */}
       <div className="flex flex-row border-b border-border p-4 items-center gap-4 w-full">
         <div className="flex flex-row items-center gap-3 flex-1">
-          <Facehash
-            name={selectedDatabase?.name || "database"}
-            className="rounded-sm"
-            colorClasses={[
-              "bg-blue-500",
-              "bg-orange-500",
-              "bg-purple-500",
-              "bg-lime-500",
-              "bg-indigo-500",
-              "bg-pink-500",
-              "bg-teal-500",
-              "bg-yellow-500",
-              "bg-sky-500",
-              "bg-fuchsia-500",
-              "bg-rose-500",
-              "bg-green-500",
-            ]}
-            size={32}
-          />
+          <DitherAvatar value={selectedDatabase?.name || "database"} size={32} />
+
           <div className="flex flex-row items-center gap-2">
             <h1 className="text-2xl font-medium text-neutral-100">Tables</h1>
           </div>
@@ -232,14 +216,13 @@ export default function Tables() {
         <div className="flex-1 flex min-h-0">
           {/* Tables sidebar */}
           <div className="w-64 shrink-0 p-4 overflow-hidden flex flex-col">
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1 flex flex-col gap-1">
               {tables?.map((table, i) => (
                 <button
                   key={i}
                   onClick={() => fetchTableData(table.name)}
-                  className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${
-                    selectedTableName === table.name ? "bg-muted/75" : ""
-                  }`}
+                  className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${selectedTableName === table.name ? "bg-muted/75" : ""
+                    }`}
                 >
                   <div className="flex flex-row items-center gap-2">
                     <TableIcon
@@ -251,11 +234,10 @@ export default function Tables() {
                       }
                     />
                     <span
-                      className={`text-base ${
-                        selectedTableName === table.name
-                          ? "text-neutral-100"
-                          : "text-neutral-200"
-                      }`}
+                      className={`text-base ${selectedTableName === table.name
+                        ? "text-neutral-100"
+                        : "text-neutral-200"
+                        }`}
                     >
                       {table.name}
                     </span>
@@ -351,9 +333,8 @@ export default function Tables() {
                                     return (
                                       <td
                                         key={j}
-                                        className={`py-2 px-4 font-mono text-xs max-w-xs truncate border-l border-transparent ${
-                                          isEdited ? "" : ""
-                                        }`}
+                                        className={`py-2 px-4 font-mono text-xs max-w-xs truncate border-l border-transparent ${isEdited ? "" : ""
+                                          }`}
                                         onDoubleClick={() =>
                                           handleCellDoubleClick(
                                             i,
@@ -374,9 +355,8 @@ export default function Tables() {
                                               e.target.value,
                                             )
                                           }
-                                          className={`w-full bg-transparent border-none outline-none text-neutral-200 placeholder-neutral-600 ${
-                                            isEdited ? "text-blue-200" : ""
-                                          }`}
+                                          className={`w-full bg-transparent border-none outline-none text-neutral-200 placeholder-neutral-600 ${isEdited ? "text-blue-200" : ""
+                                            }`}
                                           placeholder={
                                             value === null ? "NULL" : undefined
                                           }

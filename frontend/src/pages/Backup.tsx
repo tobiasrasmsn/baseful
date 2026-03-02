@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { Facehash } from "facehash";
 import { useDatabase } from "@/context/DatabaseContext";
+import { DitherAvatar } from "@/components/ui/hash-avatar";
 
 interface BackupSettings {
   database_id: number;
@@ -307,25 +308,8 @@ export default function Backup() {
     <div className="flex flex-col gap-6 h-full">
       <div className="flex flex-row border-b border-border p-4 items-center gap-4 w-full">
         <div className="flex flex-row items-center gap-3 flex-1">
-          <Facehash
-            name={selectedDatabase?.name || "database"}
-            className="rounded-sm"
-            colorClasses={[
-              "bg-blue-500",
-              "bg-orange-500",
-              "bg-purple-500",
-              "bg-lime-500",
-              "bg-indigo-500",
-              "bg-pink-500",
-              "bg-teal-500",
-              "bg-yellow-500",
-              "bg-sky-500",
-              "bg-fuchsia-500",
-              "bg-rose-500",
-              "bg-green-500",
-            ]}
-            size={32}
-          />
+          <DitherAvatar value={selectedDatabase?.name || "database"} size={32} />
+
           <div className="flex flex-row items-center gap-2">
             <h1 className="text-2xl font-medium text-neutral-100">
               Backups & Restoration
@@ -606,22 +590,20 @@ export default function Backup() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setExternalRestoreMode("file")}
-                    className={`flex-1 py-3 px-4 rounded-md border text-sm font-medium transition-colors ${
-                      externalRestoreMode === "file"
+                    className={`flex-1 py-3 px-4 rounded-md border text-sm font-medium transition-colors ${externalRestoreMode === "file"
                         ? "border-blue-500 bg-blue-500/10 text-blue-400"
                         : "border-border bg-neutral-900 text-neutral-400 hover:text-neutral-200"
-                    }`}
+                      }`}
                   >
                     <UploadIcon className="inline-block mr-2" size={16} />
                     Upload File
                   </button>
                   <button
                     onClick={() => setExternalRestoreMode("connection")}
-                    className={`flex-1 py-3 px-4 rounded-md border text-sm font-medium transition-colors ${
-                      externalRestoreMode === "connection"
+                    className={`flex-1 py-3 px-4 rounded-md border text-sm font-medium transition-colors ${externalRestoreMode === "connection"
                         ? "border-blue-500 bg-blue-500/10 text-blue-400"
                         : "border-border bg-neutral-900 text-neutral-400 hover:text-neutral-200"
-                    }`}
+                      }`}
                   >
                     <ClockCounterClockwiseIcon
                       className="inline-block mr-2"

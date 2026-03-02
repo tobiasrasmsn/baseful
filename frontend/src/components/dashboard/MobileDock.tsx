@@ -21,6 +21,7 @@ import { useProject } from "@/context/ProjectContext";
 import { Facehash } from "facehash";
 import CreateDatabaseDialog from "../database/CreateDatabaseDialog";
 import CreateProjectDialog from "../project/CreateProjectDialog";
+import { DitherAvatar } from "../ui/hash-avatar";
 
 export default function MobileDock() {
   const { selectedDatabase, databases, refreshDatabases } = useDatabase();
@@ -97,57 +98,57 @@ export default function MobileDock() {
 
   const navItems = selectedDatabase
     ? [
-        {
-          section: "DATABASE",
-          items: [
-            {
-              name: "Dashboard",
-              icon: HouseIcon,
-              path: `/db/${selectedDatabase.id}/dashboard`,
-            },
-            {
-              name: "Tables",
-              icon: TableIcon,
-              path: `/db/${selectedDatabase.id}/tables`,
-            },
-            {
-              name: "SQL Editor",
-              icon: TerminalIcon,
-              path: `/db/${selectedDatabase.id}/sql-editor`,
-            },
-            {
-              name: "Backup",
-              icon: ClockCounterClockwiseIcon,
-              path: `/db/${selectedDatabase.id}/backup`,
-            },
-            {
-              name: "Settings",
-              icon: GearSixIcon,
-              path: `/db/${selectedDatabase.id}/settings`,
-            },
-          ],
-        },
-        {
-          section: "SERVER",
-          items: [
-            {
-              name: "Monitoring",
-              icon: GraphIcon,
-              path: `/db/${selectedDatabase.id}/monitoring`,
-            },
-            {
-              name: "Containers",
-              icon: CubeIcon,
-              path: `/db/${selectedDatabase.id}/containers`,
-            },
-            {
-              name: "Web Server",
-              icon: Globe,
-              path: `/db/${selectedDatabase.id}/web-server`,
-            },
-          ],
-        },
-      ]
+      {
+        section: "DATABASE",
+        items: [
+          {
+            name: "Dashboard",
+            icon: HouseIcon,
+            path: `/db/${selectedDatabase.id}/dashboard`,
+          },
+          {
+            name: "Tables",
+            icon: TableIcon,
+            path: `/db/${selectedDatabase.id}/tables`,
+          },
+          {
+            name: "SQL Editor",
+            icon: TerminalIcon,
+            path: `/db/${selectedDatabase.id}/sql-editor`,
+          },
+          {
+            name: "Backup",
+            icon: ClockCounterClockwiseIcon,
+            path: `/db/${selectedDatabase.id}/backup`,
+          },
+          {
+            name: "Settings",
+            icon: GearSixIcon,
+            path: `/db/${selectedDatabase.id}/settings`,
+          },
+        ],
+      },
+      {
+        section: "SERVER",
+        items: [
+          {
+            name: "Monitoring",
+            icon: GraphIcon,
+            path: `/db/${selectedDatabase.id}/monitoring`,
+          },
+          {
+            name: "Containers",
+            icon: CubeIcon,
+            path: `/db/${selectedDatabase.id}/containers`,
+          },
+          {
+            name: "Web Server",
+            icon: Globe,
+            path: `/db/${selectedDatabase.id}/web-server`,
+          },
+        ],
+      },
+    ]
     : [];
 
   const isActivePath = (path: string) => location.pathname === path;
@@ -220,11 +221,10 @@ export default function MobileDock() {
                         <Link
                           to={item.path}
                           onClick={() => setIsExpanded(false)}
-                          className={`flex flex-row items-center gap-3 p-2.5 rounded-lg transition-colors ${
-                            isActivePath(item.path)
-                              ? "bg-accent text-white"
-                              : "text-neutral-300 hover:bg-muted/50"
-                          }`}
+                          className={`flex flex-row items-center gap-3 p-2.5 rounded-lg transition-colors ${isActivePath(item.path)
+                            ? "bg-accent text-white"
+                            : "text-neutral-300 hover:bg-muted/50"
+                            }`}
                         >
                           <Icon
                             size={20}
@@ -257,9 +257,8 @@ export default function MobileDock() {
 
       {/* Floating Dock */}
       <div
-        className={`fixed -translate-x-1/2 w-fit transition-all duration-300 left-1/2 right-0 z-50 md:hidden ${
-          isDockVisible ? "bottom-4 translate-y-0" : "bottom-0 translate-y-full"
-        }`}
+        className={`fixed -translate-x-1/2 w-fit transition-all duration-300 left-1/2 right-0 z-50 md:hidden ${isDockVisible ? "bottom-4 translate-y-0" : "bottom-0 translate-y-full"
+          }`}
       >
         <div className="mx-2 mb-2 bg-card/95 backdrop-blur-lg border border-border rounded-2xl shadow-2xl">
           <div className="flex flex-row justify-between items-center h-14 px-2 gap-2">
@@ -267,26 +266,8 @@ export default function MobileDock() {
             <Popover open={selectorOpen} onOpenChange={setSelectorOpen}>
               <PopoverTrigger asChild>
                 <div className="flex flex-row items-center gap-2 cursor-pointer p-2 rounded-xl bg-transparent hover:bg-muted transition-colors min-w-0">
-                  <Facehash
-                    name={selectedDatabase?.name || "database"}
-                    className="rounded-sm shrink-0"
-                    colorClasses={[
-                      "bg-blue-500",
-                      "bg-orange-500",
-                      "bg-purple-500",
-                      "bg-lime-500",
-                      "bg-indigo-500",
-                      "bg-pink-500",
-                      "bg-teal-500",
-                      "bg-yellow-500",
-                      "bg-sky-500",
-                      "bg-fuchsia-500",
-                      "bg-rose-500",
-                      "bg-green-500",
-                    ]}
-                    size={22}
-                    enableBlink={true}
-                  />
+                  <DitherAvatar value={selectedDatabase?.name || "database"} size={32} />
+
                   <div className="flex flex-col flex-1 min-w-0">
                     <span className="text-sm font-medium truncate">
                       {getSelectorDisplayText()}
@@ -326,31 +307,13 @@ export default function MobileDock() {
                                       onClick={() => {
                                         setSelectorOpen(false);
                                       }}
-                                      className={`flex flex-row items-center gap-2 p-2 rounded-md transition-colors ${
-                                        selectedDatabase?.id === db.id
-                                          ? "bg-accent"
-                                          : "hover:bg-accent"
-                                      }`}
+                                      className={`flex flex-row items-center gap-2 p-2 rounded-md transition-colors ${selectedDatabase?.id === db.id
+                                        ? "bg-accent"
+                                        : "hover:bg-accent"
+                                        }`}
                                     >
-                                      <Facehash
-                                        name={db.name}
-                                        className="rounded-sm"
-                                        colorClasses={[
-                                          "bg-blue-500",
-                                          "bg-orange-500",
-                                          "bg-purple-500",
-                                          "bg-lime-500",
-                                          "bg-indigo-500",
-                                          "bg-pink-500",
-                                          "bg-teal-500",
-                                          "bg-yellow-500",
-                                          "bg-sky-500",
-                                          "bg-fuchsia-500",
-                                          "bg-rose-500",
-                                          "bg-green-500",
-                                        ]}
-                                        size={20}
-                                      />
+                                      <DitherAvatar value={db?.name || "database"} size={32} />
+
                                       <span className="text-sm text-neutral-200">
                                         {db.name}
                                       </span>

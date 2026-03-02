@@ -28,6 +28,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DitherAvatar } from "@/components/ui/hash-avatar";
 
 interface Database {
   id: number;
@@ -349,25 +350,8 @@ export default function DatabaseDetail() {
       <div className="flex flex-col items-center justify-between">
         <div className="flex flex-row border-b border-border p-4 items-center gap-4 w-full">
           <div className="flex flex-row items-center gap-3 flex-1">
-            <Facehash
-              name={database.name}
-              className="rounded-sm"
-              colorClasses={[
-                "bg-blue-500",
-                "bg-orange-500",
-                "bg-purple-500",
-                "bg-lime-500",
-                "bg-indigo-500",
-                "bg-pink-500",
-                "bg-teal-500",
-                "bg-yellow-500",
-                "bg-sky-500",
-                "bg-fuchsia-500",
-                "bg-rose-500",
-                "bg-green-500",
-              ]}
-              size={32}
-            />
+            <DitherAvatar value={database?.name || "database"} size={32} />
+
             <div className="flex flex-row items-center gap-2">
               {loading ? (
                 <Skeleton className="h-8 w-48" />
@@ -482,14 +466,12 @@ export default function DatabaseDetail() {
                         </div>
                         <button
                           onClick={() => setUseDomain(!useDomain)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                            useDomain ? "bg-blue-600" : "bg-neutral-600"
-                          }`}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useDomain ? "bg-blue-600" : "bg-neutral-600"
+                            }`}
                         >
                           <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              useDomain ? "translate-x-6" : "translate-x-1"
-                            }`}
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useDomain ? "translate-x-6" : "translate-x-1"
+                              }`}
                           />
                         </button>
                       </div>
@@ -512,16 +494,14 @@ export default function DatabaseDetail() {
                     <button
                       onClick={() => setUseSSL(!useSSL)}
                       disabled={useDomain}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        useSSL || useDomain ? "bg-green-600" : "bg-neutral-600"
-                      } ${useDomain ? "opacity-50 cursor-not-allowed" : ""}`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useSSL || useDomain ? "bg-green-600" : "bg-neutral-600"
+                        } ${useDomain ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          useSSL || useDomain
-                            ? "translate-x-6"
-                            : "translate-x-1"
-                        }`}
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useSSL || useDomain
+                          ? "translate-x-6"
+                          : "translate-x-1"
+                          }`}
                       />
                     </button>
                   </div>
@@ -591,7 +571,7 @@ export default function DatabaseDetail() {
               <div className="p-4">
                 <p className="text-2xl font-medium text-neutral-100 font-mono">
                   {metrics?.cpu_usage_percent !== undefined &&
-                  metrics?.cpu_usage_percent < 0.01
+                    metrics?.cpu_usage_percent < 0.01
                     ? metrics?.cpu_usage_percent.toFixed(4)
                     : (metrics?.cpu_usage_percent?.toFixed(1) ?? "0")}
                   %
