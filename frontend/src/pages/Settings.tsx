@@ -160,7 +160,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="flex flex-col h-full  relative">
+    <div className="flex flex-col h-full  relative ">
       {/* Header */}
       <div className="flex flex-row border-b border-border p-4 items-center gap-4 w-full">
         <div className="flex flex-row items-center gap-3 flex-1">

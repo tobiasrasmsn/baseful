@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { TableIcon } from "@phosphor-icons/react";
+import { TableIcon, CaretUp, CaretDown, CaretUpDown } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface TableInfo {
   name: string;
@@ -60,6 +61,10 @@ export default function Tables() {
   const [filterCol, setFilterCol] = useState<string>("");
   const [filterOp, setFilterOp] = useState<string>("equals");
   const [filterVal, setFilterVal] = useState<string>("");
+
+  // Sort state
+  const [sortBy, setSortBy] = useState<string>("id");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const hasChanges = Object.keys(editedCells).length > 0;
 
@@ -150,17 +155,24 @@ export default function Tables() {
     fCol?: string,
     fOp?: string,
     fVal?: string,
+    sBy?: string,
+    sDir?: string,
   ) => {
-    // Reset filters if we are switching to a different table
+    // Reset filters and sort if we are switching to a different table
     if (tableName !== selectedTableName) {
       setFilterCol("");
       setFilterOp("equals");
       setFilterVal("");
+      setSortBy("id");
+      setSortOrder("asc");
     }
 
     setSelectedTableName(tableName);
     setTableLoading(true);
-    setSelectedTable(null);
+    // Only reset if we're switching tables
+    if (tableName !== selectedTableName) {
+      setSelectedTable(null);
+    }
     try {
       const offset = (page - 1) * limit;
       let url = `/api/databases/${id}/tables/${tableName}?offset=${offset}&limit=${limit}`;
@@ -169,10 +181,14 @@ export default function Tables() {
       const col = fCol !== undefined ? fCol : filterCol;
       const op = fOp !== undefined ? fOp : filterOp;
       const val = fVal !== undefined ? fVal : filterVal;
+      const sortByVal = sBy !== undefined ? sBy : sortBy;
+      const sortDirVal = sDir !== undefined ? sDir : sortOrder;
 
       if (col && op && val) {
         url += `&filterCol=${encodeURIComponent(col)}&filterOp=${encodeURIComponent(op)}&filterVal=${encodeURIComponent(val)}`;
       }
+
+      url += `&sortBy=${encodeURIComponent(sortByVal)}&sortOrder=${encodeURIComponent(sortDirVal)}`;
 
       const res = await authFetch(url, token, {}, logout);
       if (!res.ok) throw new Error("Failed to fetch table data");
@@ -189,13 +205,28 @@ export default function Tables() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-neutral-400">Loading tables...</div>
-      </div>
-    );
-  }
+  const handleSort = (columnName: string) => {
+    let newOrder: "asc" | "desc" = "asc";
+    if (sortBy === columnName) {
+      newOrder = sortOrder === "asc" ? "desc" : "asc";
+    }
+    setSortBy(columnName);
+    setSortOrder(newOrder);
+
+    if (selectedTableName) {
+      fetchTableData(
+        selectedTableName,
+        currentPage,
+        rowsPerPage,
+        filterCol,
+        filterOp,
+        filterVal,
+        columnName,
+        newOrder
+      );
+    }
+  };
+
 
   if (error && !selectedDatabase) {
     return (
@@ -243,42 +274,44 @@ export default function Tables() {
           {/* Tables sidebar */}
           <div className="w-64 shrink-0 p-4 overflow-hidden flex flex-col">
             <div className="overflow-y-auto flex-1 flex flex-col gap-1">
-              {tables?.map((table, i) => (
-                <button
-                  key={i}
-                  onClick={() => table.name && fetchTableData(table.name)}
-                  className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${selectedTableName === table.name ? "bg-muted/75" : ""
-                    }`}
-                >
-                  <div className="flex flex-row items-center gap-2">
-                    <TableIcon
-                      size={16}
-                      className={
-                        selectedTableName === table.name
+              {loading ? (
+                <SidebarSkeleton />
+              ) : (
+                tables?.map((table, i) => (
+                  <button
+                    key={i}
+                    onClick={() => table.name && fetchTableData(table.name)}
+                    className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${selectedTableName === table.name ? "bg-muted/75" : ""
+                      }`}
+                  >
+                    <div className="flex flex-row items-center gap-2">
+                      <TableIcon
+                        size={16}
+                        className={
+                          selectedTableName === table.name
+                            ? "text-neutral-100"
+                            : "text-neutral-500"
+                        }
+                      />
+                      <span
+                        className={`text-base ${selectedTableName === table.name
                           ? "text-neutral-100"
-                          : "text-neutral-500"
-                      }
-                    />
-                    <span
-                      className={`text-base ${selectedTableName === table.name
-                        ? "text-neutral-100"
-                        : "text-neutral-200"
-                        }`}
-                    >
-                      {table.name}
-                    </span>
-                  </div>
-                </button>
-              ))}
+                          : "text-neutral-200"
+                          }`}
+                      >
+                        {table.name}
+                      </span>
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           </div>
 
           {/* Table content */}
-          <div className="flex-1 flex flex-col min-h-0 border-l border-border overflow-hidden">
-            {tableLoading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-neutral-400">Loading data...</div>
-              </div>
+          <div className="flex-1 flex flex-col min-h-0 border-l border-border overflow-hidden relative">
+            {tableLoading && !selectedTable ? (
+              <TableSkeleton name={selectedTableName} />
             ) : !selectedTable ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
@@ -290,7 +323,12 @@ export default function Tables() {
             ) : (
               <>
                 {/* Table header */}
-                <div className="border-b border-border">
+                <div className="border-b border-border relative">
+                  {tableLoading && (
+                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-600/30 overflow-hidden z-10">
+                      <div className="h-full bg-blue-500 animate-[loading_1s_infinite_ease-in-out]" style={{ width: '40%' }}></div>
+                    </div>
+                  )}
                   <div className="flex flex-row items-center justify-between gap-3 p-4">
                     <div>
                       <h2 className="text-2xl font-medium text-neutral-100">
@@ -448,15 +486,31 @@ export default function Tables() {
                     ) : (
                       <>
                         <div className="flex-1 overflow-auto">
-                          <table className="w-full text-sm">
+                          <table className="w-full text-sm border-separate border-spacing-0">
                             <thead className="bg-transparent!">
-                              <tr className="border-b! bg-transparent! border-border! sticky top-0">
+                              <tr className="bg-transparent! sticky top-0 z-20">
                                 {selectedTable.columns?.map((col, i) => (
                                   <th
                                     key={i}
-                                    className="text-left bg-[#141414]! py-2 px-2 text-neutral-400 font-medium border-l border-border first:border-l-0"
+                                    className="text-left bg-[#141414]! py-0 px-0 text-neutral-400 font-medium border-b border-r border-border last:border-r-0"
                                   >
-                                    {col.name}
+                                    <button
+                                      onClick={() => handleSort(col.name)}
+                                      className="w-full h-full flex flex-row items-center justify-between gap-2 px-2 py-2 hover:bg-neutral-800 transition-colors group"
+                                    >
+                                      <span className="truncate">{col.name}</span>
+                                      <div className="shrink-0 flex items-center">
+                                        {sortBy === col.name ? (
+                                          sortOrder === "asc" ? (
+                                            <CaretUp size={12} weight="bold" className="text-foreground" />
+                                          ) : (
+                                            <CaretDown size={12} weight="bold" className="text-foreground" />
+                                          )
+                                        ) : (
+                                          <CaretUpDown size={12} className="text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        )}
+                                      </div>
+                                    </button>
                                   </th>
                                 ))}
                               </tr>
@@ -465,7 +519,7 @@ export default function Tables() {
                               {selectedTable.rows?.map((row, i) => (
                                 <tr
                                   key={i}
-                                  className="border-b border-border/50 hover:bg-neutral-800/50"
+                                  className="hover:bg-neutral-800/50"
                                 >
                                   {selectedTable.columns?.map((col, j) => {
                                     const cellKey = `${i}|||${col.name}`;
@@ -506,7 +560,7 @@ export default function Tables() {
                                           >
                                             <SelectTrigger
                                               size="sm"
-                                              className="h-fit! py-1! w-full border-none bg-transparent px-1 font-mono text-xs focus:ring-0 focus:ring-offset-0 shadow-none hover:bg-neutral-800/30"
+                                              className="h-fit! py-1! w-full! border-none bg-transparent! px-2 font-mono text-[10px] font-bold uppercase tracking-wider focus:ring-0 focus:ring-offset-0 shadow-none hover:bg-transparent! justify-start"
                                             >
                                               <SelectValue />
                                             </SelectTrigger>
@@ -646,7 +700,7 @@ export default function Tables() {
                                     return (
                                       <td
                                         key={j}
-                                        className="py-0.5 px-0 font-mono text-xs border-l border-transparent min-w-[60px] max-w-[200px] truncate"
+                                        className="py-0.5 px-0 font-mono text-xs border-b border-r border-border last:border-r-0 min-w-[60px] max-w-[200px] truncate"
                                       >
                                         {renderInput()}
                                       </td>
@@ -657,7 +711,7 @@ export default function Tables() {
                             </tbody>
                           </table>
                         </div>
-                        <div className="p-3 border-t border-border flex items-center justify-between bg-neutral-900 shrink-0">
+                        <div className="p-3 border-t border-border flex items-center justify-between bg-[#141414] shrink-0">
                           <div className="flex items-center gap-4">
                             <span className="text-xs text-neutral-500">
                               Showing{" "}
@@ -778,3 +832,75 @@ export default function Tables() {
     </div>
   );
 }
+
+const SidebarSkeleton = () => (
+  <div className="flex flex-col gap-1 w-full">
+    {Array.from({ length: 6 }).map((_, i) => (
+      <div key={i} className="flex flex-row items-center gap-2 py-1.5 px-3">
+        <Skeleton className="h-4 w-4 rounded-sm opacity-50" />
+        <Skeleton className="h-6 w-[60%] rounded-sm opacity-50" />
+      </div>
+    ))}
+  </div>
+);
+
+const TableSkeleton = ({ name }: { name: string | null }) => (
+  <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    {/* Table Tool Bar Skeleton */}
+    <div className="border-b border-border">
+      <div className="flex flex-row items-center justify-between gap-3 p-4">
+        <div>
+          <h2 className="text-2xl font-medium text-neutral-100">
+            {name}
+          </h2>
+          <Skeleton className="h-4 w-32 mt-1" />
+        </div>
+      </div>
+      {/* Filter UI Skeleton */}
+      <div className="flex flex-row items-center border-t border-border h-8 bg-transparent">
+        <div className="w-[180px] h-full border-r border-border flex items-center px-4">
+          <Skeleton className="h-3 w-20 opacity-30" />
+        </div>
+        <div className="w-[180px] h-full border-r border-border flex items-center px-4">
+          <Skeleton className="h-3 w-20 opacity-30" />
+        </div>
+        <div className="flex-1 h-full flex items-center px-4">
+          <Skeleton className="h-3 w-32 opacity-30" />
+        </div>
+      </div>
+    </div>
+
+    {/* Table Data Skeleton */}
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-sm border-separate border-spacing-0">
+          <thead className="bg-[#141414]!">
+            <tr className="sticky top-0 z-20">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <th key={i} className="text-left bg-[#141414]! py-[8px] px-2 border-b border-r border-border last:border-r-0">
+                  <Skeleton className="h-5 w-20" />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 20 }).map((_, i) => (
+              <tr key={i} className="">
+                {Array.from({ length: 6 }).map((_, j) => (
+                  <td key={j} className="py-[8px] px-2 border-b border-r border-border last:border-r-0">
+                    <Skeleton className="h-5 w-full opacity-30" />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Pagination Skeleton */}
+      <div className="p-3 border-t border-border flex items-center justify-between bg-[#141414] shrink-0">
+        <Skeleton className="h-4 w-64" />
+        <Skeleton className="h-6 w-32" />
+      </div>
+    </div>
+  </div>
+);

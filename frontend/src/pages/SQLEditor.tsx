@@ -156,7 +156,7 @@ export default function SQLEditor() {
   return (
     <div className="flex flex-col h-full max-w-full overflow-x-hidden">
       {/* Refined Header */}
-      <div className="flex flex-row border-b border-border p-4 items-center justify-between bg-neutral-900/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="flex flex-row border-b border-border p-4 items-center justify-between sticky top-0 z-10">
         <div className="flex flex-row items-center gap-3 flex-1">
           <DitherAvatar value={selectedDatabase?.name || "database"} size={32} />
 
@@ -289,8 +289,8 @@ export default function SQLEditor() {
 
       <div className="flex-1 flex flex-col min-h-0 max-w-full overflow-hidden divide-y divide-border">
         {/* Editor Area */}
-        <div className="flex-[0.4] flex flex-col bg-card min-h-[200px]">
-          <div className="flex items-center justify-between px-4 py-2 bg-neutral-900/30 border-b border-border/50">
+        <div className="flex-[0.4] flex flex-col min-h-[200px]">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border">
             <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
               Editor
             </span>
@@ -310,7 +310,7 @@ export default function SQLEditor() {
                   !selectedDatabase ||
                   selectedDatabase.status !== "active"
                 }
-                className="text-[10px] text-green-500 hover:text-green-400 font-bold flex items-center gap-1 transition-colors disabled:opacity-50"
+                className="text-[10px] text-neutral-500 hover:text-neutral-400 font-bold flex items-center gap-1 transition-colors disabled:opacity-50"
               >
                 <PlayIcon size={12} weight="fill" />
                 {loading ? "RUNNING..." : "EXECUTE"}
@@ -323,7 +323,7 @@ export default function SQLEditor() {
               onValueChange={setQuery}
               highlight={(code) => highlight(code, languages.sql, "sql")}
               padding={16}
-              placeholder="-- Write your SQL here..."
+              placeholder="Write your SQL here..."
               className="w-full h-full bg-transparent text-neutral-200 font-mono text-sm outline-none leading-relaxed"
               style={{
                 fontFamily: '"Fira Code", "Courier New", monospace',
@@ -335,8 +335,8 @@ export default function SQLEditor() {
         </div>
 
         {/* Results Area */}
-        <div className="flex-[0.6] flex flex-col bg-neutral-900/20 min-h-0">
-          <div className="flex items-center justify-between px-4 py-2 bg-neutral-900/30 border-b border-border/50">
+        <div className="flex-[0.6] flex flex-col min-h-0">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border">
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
                 Result

@@ -30,42 +30,54 @@ export default function MobileDock() {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [isDockVisible, setIsDockVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
-  const scrollContainerRef = useRef<HTMLElement | null>(null);
-
   // Handle scroll to hide/show dock
+  const lastScrollY = useRef(0);
+  const scrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expandedMenuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    // Find the scrollable container (the div with overflow-y-auto)
-    const findScrollContainer = () => {
-      const mainContent = document.querySelector(".overflow-y-auto");
-      return mainContent as HTMLElement | null;
-    };
+    // Reset scroll position when location changes
+    lastScrollY.current = 0;
+    setIsDockVisible(true);
+  }, [location.pathname]);
 
-    scrollContainerRef.current = findScrollContainer();
-    const container = scrollContainerRef.current;
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      // Get the element that actually scrolled
+      const target = e.target as HTMLElement;
+      if (!target || typeof target.scrollTop === "undefined") return;
 
-    if (!container) return;
+      // Ignore scroll events originating from inside the dock's own menu
+      if (expandedMenuRef.current?.contains(target)) return;
 
-    const handleScroll = () => {
-      const currentScrollY = container.scrollTop;
-      const scrollDifference = currentScrollY - lastScrollY;
+      // Only respond to vertical scrolling on elements that are intended to be scrollable
+      const currentScrollY = target.scrollTop;
+      const scrollDifference = currentScrollY - lastScrollY.current;
 
-      // Only hide if scrolled down more than 10px
-      if (scrollDifference > 10 && currentScrollY > 100) {
-        setIsDockVisible(false);
-        setIsExpanded(false); // Close menu when hiding
+      // Only hide if scrolled down significantly and we're not at the very top
+      if (scrollDifference > 10 && currentScrollY > 20) {
+        // Don't hide if the menu is expanded
+        if (!isExpanded) {
+          setIsDockVisible(false);
+        }
       }
-      // Show when scrolling up or at the top
-      else if (scrollDifference < -10 || currentScrollY < 100) {
+      // Show when scrolling up significantly or at the top
+      else if (scrollDifference < -10 || currentScrollY < 20) {
         setIsDockVisible(true);
       }
 
-      setLastScrollY(currentScrollY);
+      lastScrollY.current = currentScrollY;
     };
 
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [lastScrollY]);
+    // Use capture: true to catch scroll events from ANY nested element 
+    // since scroll events do not bubble.
+    window.addEventListener("scroll", handleScroll, { capture: true, passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll, { capture: true });
+      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+    };
+  }, [isExpanded]);
 
   // Group databases by project
   const databasesByProject = (databases || []).reduce(
@@ -164,7 +176,10 @@ export default function MobileDock() {
 
       {/* Expanded Menu */}
       {isExpanded && (
-        <div className="fixed bottom-16 left-2 right-2 z-50 bg-card border border-border rounded-xl shadow-2xl animate-in slide-in-from-bottom-4 duration-300 md:hidden max-h-[70vh] overflow-hidden flex flex-col">
+        <div
+          ref={expandedMenuRef}
+          className="fixed bottom-16 left-2 right-2 z-50 bg-card border border-border rounded-xl shadow-2xl animate-in slide-in-from-bottom-4 duration-300 md:hidden max-h-[70vh] overflow-hidden flex flex-col"
+        >
           {/* Quick Actions */}
           <div className="flex flex-row gap-2 p-3 border-b border-border">
             <div className="flex-1 bg-muted/50 size-10 text-sm flex items-center gap-2 justify-center rounded-lg text-neutral-400 hover:text-neutral-300 transition-colors duration-200 cursor-pointer active:scale-95">

@@ -239,7 +239,7 @@ export default function Sidebar() {
                   <div key={projectId} className="mb-2">
                     {dbs.length > 0 && (
                       <>
-                        <div className="flex flex-row items-center">
+                        <div className="flex flex-row items-center mb-1">
                           <p className="text-xs text-neutral-400 px-2 font-normal">
                             {getProjectName(parseInt(projectId) || undefined)}
                           </p>

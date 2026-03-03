@@ -83,13 +83,12 @@ export const DitherAvatar = ({
 
     return (
         <div
-            className={className}
+            className={`${className} inline-block`}
             style={{
                 width: size,
                 height: size,
                 borderRadius: '6px',
                 overflow: 'hidden',
-                display: 'inline-block',
             }}
         >
             <svg

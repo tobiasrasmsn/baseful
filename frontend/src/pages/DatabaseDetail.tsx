@@ -363,7 +363,7 @@ export default function DatabaseDetail() {
                 <Skeleton className="h-8 w-48" />
               ) : (
                 <>
-                  <h1 className="text-2xl font-medium text-neutral-100">
+                  <h1 className="text-lg md:text-2xl font-medium text-neutral-100">
                     {database?.name}
                   </h1>
                   <div

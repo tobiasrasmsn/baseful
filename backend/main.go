@@ -247,6 +247,7 @@ func main() {
 		r.StaticFS("/assets", http.Dir("./frontend/dist/assets"))
 		r.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
 		r.StaticFile("/vite.svg", "./frontend/dist/vite.svg")
+		r.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
 
 		// Catch-all route for SPA: serve index.html for any other route
 		r.NoRoute(func(c *gin.Context) {
@@ -1688,6 +1689,22 @@ func main() {
 		// Get pagination parameters
 		offset := c.DefaultQuery("offset", "0")
 		limit := c.DefaultQuery("limit", "100")
+		sortBy := c.DefaultQuery("sortBy", "id")
+		sortDir := c.DefaultQuery("sortOrder", "asc")
+
+		// Validate sortDir
+		if sortDir != "asc" && sortDir != "desc" {
+			sortDir = "asc"
+		}
+
+		// Validate sortBy against columns
+		validSortBy := "id"
+		for _, col := range columns {
+			if col["name"] == sortBy {
+				validSortBy = sortBy
+				break
+			}
+		}
 
 		// Get total count
 		filterCol := c.Query("filterCol")
@@ -1724,9 +1741,9 @@ func main() {
 		countAttach.Close()
 		totalCount := strings.TrimSpace(countStdout.String())
 
-		// Get table data with pagination
+		// Get table data with pagination and sorting
 		dataCmd := []string{"psql", "-U", "postgres", "-d", name, "-t", "-A", "-F", "|", "-c",
-			fmt.Sprintf("SELECT * FROM \"%s\" %s ORDER BY id LIMIT %s OFFSET %s", tableName, whereClause, limit, offset)}
+			fmt.Sprintf("SELECT * FROM \"%s\" %s ORDER BY \"%s\" %s LIMIT %s OFFSET %s", tableName, whereClause, validSortBy, sortDir, limit, offset)}
 		dataExec, err := cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
 			Cmd:          dataCmd,
 			AttachStdout: true,
