@@ -564,7 +564,7 @@ export default function DatabaseDetail() {
           </div>
         </div>
 
-        <div className="p-12 pb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+        <div className="p-6 md:p-12 pb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           <div className="bg-card border border-border rounded-lg">
             <div className="flex flex-row items-center gap-3 px-2 py-1 w-full border-b border-border">
               <span className="text-sm font-medium text-neutral-300">CPU</span>
@@ -665,7 +665,7 @@ export default function DatabaseDetail() {
           </div>
         </div>
 
-        <div className="px-12 pb-4 grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+        <div className="px-6 md:px-12 pb-4 grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
           <div className="bg-card border border-border rounded-lg">
             <div className="flex flex-row items-center gap-3 px-2 py-1 border-b border-border">
               <span className="text-sm font-medium text-neutral-300">
@@ -729,7 +729,7 @@ export default function DatabaseDetail() {
           </div>
         </div>
 
-        <div className="px-12 grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+        <div className="px-6 md:px-12 pb-6 grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
           {/* CPU & Memory Chart */}
           <div className="bg-card border border-border rounded-lg overflow-hidden">
             <div className="p-4 flex flex-row justify-between items-center">
