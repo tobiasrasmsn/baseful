@@ -564,7 +564,7 @@ export default function DatabaseDetail() {
           </div>
         </div>
 
-        <div className="p-6 md:p-12 pb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+        <div className="p-6 md:p-12 pb-4 md:pb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           <div className="bg-card border border-border rounded-lg">
             <div className="flex flex-row items-center gap-3 px-2 py-1 w-full border-b border-border">
               <span className="text-sm font-medium text-neutral-300">CPU</span>

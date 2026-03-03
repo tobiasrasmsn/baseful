@@ -12,6 +12,7 @@ import {
   TerminalIcon,
   LockIcon,
   UsersIcon,
+  DatabaseIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -129,7 +130,7 @@ export default function Sidebar() {
 
   return (
     <div className="w-72 p-2 flex flex-col h-full">
-      <div className="mb-6 flex flex-row items-center justify-between">
+      <div className="mb-8 flex flex-row items-center justify-between">
         {/* Combined Project/Database Selector */}
         <Popover open={selectorOpen} onOpenChange={setSelectorOpen}>
           <PopoverTrigger asChild>
@@ -149,6 +150,7 @@ export default function Sidebar() {
           </PopoverTrigger>
           <PopoverContent className="w-64 max-h-96 overflow-y-auto p-2 pb-0 pt-4 ml-2">
             <div className="flex flex-col gap-2">
+
               {(databases || []).length === 0 ? (
                 <div className="text-sm text-neutral-500 px-2 pb-4">
                   No databases yet. Create one to get started.
@@ -197,12 +199,14 @@ export default function Sidebar() {
 
         {/* Actions */}
         <div className="flex flex-row gap-1 px-1">
-          <div className="bg-card size-6 flex items-center justify-center rounded-sm text-neutral-400 hover:text-neutral-300 transition-colors duration-200 cursor-pointer">
-            <MagnifyingGlassIcon size={16} />
-          </div>
+          <Link to="/">
+            <div className={`size-6 flex items-center justify-center rounded-sm  hover:text-neutral-300 transition-colors duration-200 cursor-pointer ${location.pathname === "/" ? "text-neutral-300 bg-neutral-800" : "text-neutral-400 bg-card"}`}>
+              <HouseIcon size={16} />
+            </div>
+          </Link>
           <Popover open={createMenuOpen} onOpenChange={setCreateMenuOpen}>
             <PopoverTrigger asChild>
-              <div className="bg-card size-6 flex items-center justify-center rounded-sm text-neutral-400 hover:text-neutral-300 transition-colors duration-200 cursor-pointer">
+              <div className={`bg-card size-6 flex items-center justify-center rounded-sm  hover:text-neutral-300 transition-colors duration-200 cursor-pointer ${createMenuOpen ? "text-neutral-300 bg-neutral-800" : "text-neutral-400 bg-card"}`}>
                 <PlusIcon size={16} />
               </div>
             </PopoverTrigger>
@@ -265,7 +269,7 @@ export default function Sidebar() {
                     weight="bold"
                     className="text-neutral-400"
                   />
-                  <span>Dashboard</span>
+                  <span>Overview</span>
                 </Link>
               </li>
               <li
@@ -373,6 +377,7 @@ export default function Sidebar() {
               SERVER
             </h2>
             <ul className="flex flex-col gap-1">
+
               <li
                 className={`py-1.5 px-2.5 rounded-md ${location.pathname ===
                   (selectedDatabase
