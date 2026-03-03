@@ -10,6 +10,21 @@ import (
 // AuthMiddleware validates the user session JWT
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 1. Skip Auth for static assets (non-API routes)
+		if !strings.HasPrefix(c.Request.URL.Path, "/api") {
+			c.Next()
+			return
+		}
+
+		// 2. Skip Auth for public API endpoints
+		publicPaths := []string{"/api/auth/login", "/api/auth/register", "/api/auth/status", "/api/hello"}
+		for _, path := range publicPaths {
+			if c.Request.URL.Path == path {
+				c.Next()
+				return
+			}
+		}
+
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
