@@ -7,7 +7,6 @@ import {
   ArrowCounterClockwise,
   Warning,
   Check,
-  Database as DatabaseIcon,
   CircleNotch,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";

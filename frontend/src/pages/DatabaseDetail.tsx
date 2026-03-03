@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useDatabase } from "@/context/DatabaseContext";
-import { Facehash } from "facehash";
 import {
   Popover,
   PopoverContent,

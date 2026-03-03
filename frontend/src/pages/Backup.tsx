@@ -31,7 +31,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Facehash } from "facehash";
 import { useDatabase } from "@/context/DatabaseContext";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
 import { useAuth } from "@/context/AuthContext";

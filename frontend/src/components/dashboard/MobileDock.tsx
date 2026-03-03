@@ -18,7 +18,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useDatabase } from "@/context/DatabaseContext";
 import { useProject } from "@/context/ProjectContext";
-import { Facehash } from "facehash";
 import CreateDatabaseDialog from "../database/CreateDatabaseDialog";
 import CreateProjectDialog from "../project/CreateProjectDialog";
 import { DitherAvatar } from "../ui/hash-avatar";

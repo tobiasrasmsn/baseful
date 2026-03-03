@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 
 // 8x8 Bayer Matrix, normalized to values between 0 and 1
 const BAYER_MATRIX = [
@@ -12,7 +12,7 @@ const BAYER_MATRIX = [
     [42, 26, 38, 22, 41, 25, 37, 21]
 ].map(row => row.map(v => (v + 0.5) / 64));
 
-const hashString = (str) => {
+const hashString = (str: string) => {
     let hash = 5381;
     for (let i = 0; i < str.length; i++) {
         hash = (hash * 33) ^ str.charCodeAt(i);
@@ -20,7 +20,7 @@ const hashString = (str) => {
     return hash >>> 0;
 };
 
-const createPRNG = (seed) => {
+const createPRNG = (seed: number) => {
     let currentSeed = seed || 1;
     return function () {
         currentSeed = (currentSeed * 16807) % 2147483647;
@@ -36,7 +36,7 @@ export const DitherAvatar = ({
     className = ""
 }) => {
 
-    const { bg, fg, rects } = useMemo(() => {
+    const { bg, rects } = useMemo(() => {
         const seed = hashString(value);
         const rnd = createPRNG(seed);
 

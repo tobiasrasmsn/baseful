@@ -10,11 +10,8 @@ import {
   PlusIcon,
   TableIcon,
   TerminalIcon,
-  ArrowClockwise,
   SpinnerIcon,
   LockIcon,
-  SignOut,
-  Trash,
   UsersIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
@@ -58,7 +55,7 @@ export default function Sidebar() {
   const { selectedDatabase, setSelectedDatabase, databases, refreshDatabases } =
     useDatabase();
   const { projects, refreshProjects } = useProject();
-  const { user, token, logout, resetAdmin } = useAuth();
+  const { user, token, logout, } = useAuth();
   const location = useLocation();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -208,15 +205,7 @@ export default function Sidebar() {
     }
   };
 
-  const handleManualCheck = async () => {
-    try {
-      const res = await authFetch("/api/system/update-check", token, { method: "POST" }, logout);
-      const data = await res.json();
-      setUpdateStatus(data);
-    } catch (e) {
-      console.error("Manual check failed");
-    }
-  };
+
 
   return (
     <div className="w-72 p-2 flex flex-col h-full">

@@ -12,8 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api";
-import { Container } from "lucide-react";
-
 interface ContainerInfo {
     id: string;
     names: string[];

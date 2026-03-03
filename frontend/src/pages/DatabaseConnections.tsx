@@ -10,7 +10,6 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
-import { Facehash } from "facehash";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api";

@@ -9,7 +9,6 @@ import {
   CopyIcon,
 } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
-import { Facehash } from "facehash";
 import { Button } from "@/components/ui/button";
 import {
   Popover,

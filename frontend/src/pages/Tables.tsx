@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { TableIcon } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
-import { Facehash } from "facehash";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api";
