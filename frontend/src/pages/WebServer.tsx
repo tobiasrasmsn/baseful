@@ -22,8 +22,7 @@ interface WebServerStatus {
   ip: string;
   propagated: boolean;
   ssl_enabled: boolean;
-  dashboard_port: number;
-  backend_port: number;
+  app_port: number;
   proxy_port: number;
 }
 
@@ -300,17 +299,13 @@ export default function WebServer() {
               Caddy automatically routes reverse-proxy traffic to these internal container ports.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-5 rounded-xl border border-white/[0.06] bg-[#0c0c0e] hover:bg-white/[0.02] transition-colors flex flex-col items-center justify-center text-center gap-2">
-                <div className="text-[11px] uppercase tracking-widest font-semibold text-neutral-500">Dashboard</div>
-                <div className="text-2xl font-mono text-neutral-200">{status?.dashboard_port || "—"}</div>
+                <div className="text-[11px] uppercase tracking-widest font-semibold text-neutral-500">App Port (Dashboard & API)</div>
+                <div className="text-2xl font-mono text-neutral-200">{status?.app_port || "—"}</div>
               </div>
               <div className="p-5 rounded-xl border border-white/[0.06] bg-[#0c0c0e] hover:bg-white/[0.02] transition-colors flex flex-col items-center justify-center text-center gap-2">
-                <div className="text-[11px] uppercase tracking-widest font-semibold text-neutral-500">Backend API</div>
-                <div className="text-2xl font-mono text-neutral-200">{status?.backend_port || "—"}</div>
-              </div>
-              <div className="p-5 rounded-xl border border-white/[0.06] bg-[#0c0c0e] hover:bg-white/[0.02] transition-colors flex flex-col items-center justify-center text-center gap-2">
-                <div className="text-[11px] uppercase tracking-widest font-semibold text-neutral-500">Proxy Host</div>
+                <div className="text-[11px] uppercase tracking-widest font-semibold text-neutral-500">Database Proxy Port</div>
                 <div className="text-2xl font-mono text-neutral-200">{status?.proxy_port || "—"}</div>
               </div>
             </div>

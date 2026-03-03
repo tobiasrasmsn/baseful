@@ -201,7 +201,7 @@ export default function DomainSetup() {
             </div>
           </div>
 
-          {/* Step 3: Update PUBLIC_IP */}
+          {/* Step 3: Enable SSL/TLS in the Dashboard */}
           <div className="bg-card border border-border rounded-lg p-6">
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center font-medium">
@@ -209,125 +209,21 @@ export default function DomainSetup() {
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-medium text-neutral-200 mb-2">
-                  Update your server configuration
+                  Enable SSL/TLS in the Dashboard
                 </h3>
                 <p className="text-sm text-neutral-400 mb-4">
                   Once DNS is configured and your domain resolves to your server
-                  IP, update the PUBLIC_IP environment variable.
+                  IP, you can enable SSL directly from the Web Server settings.
+                  Caddy will automatically provision and renew your certificates.
                 </p>
-
-                <div className="p-4 bg-neutral-900 rounded-lg border border-border">
-                  <p className="text-xs text-neutral-500 mb-2">
-                    Edit backend/.env file:
-                  </p>
-                  <div className="font-mono text-sm text-neutral-300">
-                    PUBLIC_IP=your-domain.com
-                  </div>
-                </div>
-
-                <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                  <h4 className="text-sm font-medium text-blue-400 mb-2">
-                    For Docker deployments:
-                  </h4>
-                  <ol className="text-xs text-neutral-400 space-y-1 list-decimal list-inside">
-                    <li>
-                      Edit the <code className="text-neutral-300">.env</code>{" "}
-                      file in the backend directory
-                    </li>
-                    <li>
-                      Change{" "}
-                      <code className="text-neutral-300">
-                        PUBLIC_IP=localhost
-                      </code>{" "}
-                      to{" "}
-                      <code className="text-neutral-300">
-                        PUBLIC_IP=your-domain.com
-                      </code>
-                    </li>
-                    <li>
-                      Restart the containers:{" "}
-                      <code className="text-neutral-300">
-                        docker compose restart
-                      </code>
-                    </li>
-                  </ol>
-                </div>
+                <Link to="/webserver" className="inline-flex items-center text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">
+                  Go to Web Server Settings
+                  <SquareArrowOutUpRight className="w-4 h-4 ml-1.5" />
+                </Link>
               </div>
             </div>
           </div>
 
-          {/* Step 4: Enable SSL */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center font-medium">
-                4
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-medium text-neutral-200 mb-2">
-                  Enable SSL/TLS
-                </h3>
-                <p className="text-sm text-neutral-400 mb-4">
-                  Once your domain is configured, generate SSL certificates and
-                  enable SSL in the proxy.
-                </p>
-
-                <div className="space-y-4">
-                  <div className="p-4 bg-neutral-900 rounded-lg border border-border">
-                    <h4 className="text-sm font-medium text-neutral-300 mb-2">
-                      Option A: Self-signed certificates (development)
-                    </h4>
-                    <div className="font-mono text-xs text-neutral-400 space-y-1">
-                      <div># Generate certificates</div>
-                      <div>cd backend</div>
-                      <div>
-                        openssl req -x509 -newkey rsa:2048 -keyout server.key
-                        -out server.crt -days 365 -nodes -subj
-                        "/CN=your-domain.com"
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-neutral-900 rounded-lg border border-border">
-                    <h4 className="text-sm font-medium text-neutral-300 mb-2">
-                      Option B: Let's Encrypt (production - recommended)
-                    </h4>
-                    <div className="font-mono text-xs text-neutral-400 space-y-1">
-                      <div># Install certbot</div>
-                      <div>sudo apt install certbot</div>
-                      <div></div>
-                      <div># Generate certificate</div>
-                      <div>
-                        sudo certbot certonly --standalone -d your-domain.com
-                      </div>
-                      <div></div>
-                      <div># Copy to backend directory</div>
-                      <div>
-                        sudo cp
-                        /etc/letsencrypt/live/your-domain.com/fullchain.pem
-                        backend/server.crt
-                      </div>
-                      <div>
-                        sudo cp
-                        /etc/letsencrypt/live/your-domain.com/privkey.pem
-                        backend/server.key
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-neutral-900 rounded-lg border border-border">
-                    <h4 className="text-sm font-medium text-neutral-300 mb-2">
-                      Update .env for SSL
-                    </h4>
-                    <div className="font-mono text-xs text-neutral-400 space-y-1">
-                      <div>PROXY_SSL_ENABLED=true</div>
-                      <div>PROXY_TLS_CERT_FILE=/path/to/server.crt</div>
-                      <div>PROXY_TLS_KEY_FILE=/path/to/server.key</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </>
       )}
 
@@ -356,31 +252,13 @@ export default function DomainSetup() {
               </div>
             </div>
 
-            <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-              <h3 className="text-sm font-medium text-amber-400 mb-2">
-                Enable SSL for the Proxy
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+              <h3 className="text-sm font-medium text-emerald-400 mb-2">
+                Automated SSL is ready
               </h3>
-              <p className="text-xs text-neutral-400 mb-3">
-                Your domain is configured, but SSL is not yet enabled for the
-                database proxy. Generate SSL certificates and update your .env
-                file to enable encrypted connections.
+              <p className="text-xs text-neutral-400">
+                SSL certificates are managed automatically by Caddy. No manual certificate generation or renewal is required.
               </p>
-              <div className="font-mono text-xs text-neutral-400 bg-neutral-900 p-3 rounded">
-                <div># Generate self-signed certificate for testing</div>
-                <div>cd backend</div>
-                <div>
-                  openssl req -x509 -newkey rsa:2048 -keyout server.key -out
-                  server.crt -days 365 -nodes -subj "/CN={domainStatus.domain}"
-                </div>
-                <div></div>
-                <div># Update .env</div>
-                <div>PROXY_SSL_ENABLED=true</div>
-                <div>PROXY_TLS_CERT_FILE=/app/server.crt</div>
-                <div>PROXY_TLS_KEY_FILE=/app/server.key</div>
-                <div></div>
-                <div># Restart proxy</div>
-                <div>docker compose -f docker-compose.proxy.yml restart</div>
-              </div>
             </div>
 
             <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">

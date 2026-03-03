@@ -1,9 +1,9 @@
 services:
-  backend:
+  baseful:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: baseful-backend
+    container_name: baseful
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backend-data:/app/data
@@ -11,45 +11,13 @@ services:
       - .:/repo
     environment:
       - DB_PATH=/app/data/data.db
+      - PORT=3002
     env_file:
-      - backend/.env
+      - .env
     ports:
-      - "8080:8080"
+      - "3002:3002"
       - "80:80"
       - "443:443"
-    networks:
-      - baseful-network
-    restart: unless-stopped
-    depends_on:
-      - proxy
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: baseful-frontend
-    ports:
-      - "3000:80"
-    networks:
-      - baseful-network
-    restart: unless-stopped
-
-  proxy:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.proxy
-    container_name: baseful-proxy
-    env_file:
-      - backend/.env
-    environment:
-      - PROXY_PORT=6432
-      - DB_READ_ONLY=true
-      - PROXY_ONLY=true
-      - DB_PATH=/app/data/data.db
-    volumes:
-      - ./backend-data:/app/data:ro
-      - ./caddy-data:/root/.local/share/caddy:ro
-    ports:
       - "6432:6432"
     networks:
       - baseful-network

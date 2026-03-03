@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"baseful/db"
@@ -38,13 +39,12 @@ func updateEnvFile(domain string) error {
 }
 
 type DomainInfo struct {
-	Domain        string `json:"domain"`
-	IP            string `json:"ip"`
-	Propagated    bool   `json:"propagated"`
-	SSLEnabled    bool   `json:"ssl_enabled"`
-	DashboardPort int    `json:"dashboard_port"`
-	BackendPort   int    `json:"backend_port"`
-	ProxyPort     int    `json:"proxy_port"`
+	Domain     string `json:"domain"`
+	IP         string `json:"ip"`
+	Propagated bool   `json:"propagated"`
+	SSLEnabled bool   `json:"ssl_enabled"`
+	AppPort    int    `json:"app_port"`
+	ProxyPort  int    `json:"proxy_port"`
 }
 
 func GetPublicIP() (string, error) {
@@ -84,13 +84,13 @@ func ProvisionSSL(domain string) error {
 	// We'll use Caddy to provision SSL.
 	// We'll generate a Caddyfile and reload Caddy.
 
-	// Get ports
-	backendPort := 8080
+	// Get backend port from environment
+	backendPortStr := os.Getenv("PORT")
+	if backendPortStr == "" {
+		backendPortStr = "8080"
+	}
 
-	// When running in Docker, we can use the service names defined in docker-compose.
-	// 'baseful-frontend' is the container name for the frontend.
-	// 'localhost' works for the backend since Caddy is in the same container.
-	frontendHost := "baseful-frontend"
+	// In single-container setup, everything is served by the backend on localhost
 	backendHost := "localhost"
 
 	caddyfileContent := fmt.Sprintf(`{
@@ -99,16 +99,9 @@ func ProvisionSSL(domain string) error {
 }
 
 %s {
-    # Backend API
-    handle /api/* {
-        reverse_proxy %s:%d
-    }
-
-    # Dashboard / Frontend
-    # The frontend container listens on port 80 internally
-    reverse_proxy %s:80
+    reverse_proxy %s:%s
 }
-`, domain, domain, backendHost, backendPort, frontendHost)
+`, domain, domain, backendHost, backendPortStr)
 
 	// If the user wants TCP proxying for the database proxy,
 	// they would need the Caddy layer4 module which is not standard.
@@ -153,13 +146,19 @@ func GetDomainInfo() (*DomainInfo, error) {
 
 	publicIP, _ := GetPublicIP()
 
+	// Get app port from environment
+	appPortStr := os.Getenv("PORT")
+	appPort, _ := strconv.Atoi(appPortStr)
+	if appPort == 0 {
+		appPort = 8080
+	}
+
 	info := &DomainInfo{
-		Domain:        domain,
-		IP:            publicIP,
-		SSLEnabled:    sslEnabled == "true",
-		DashboardPort: 3000,
-		BackendPort:   8080,
-		ProxyPort:     6432,
+		Domain:     domain,
+		IP:         publicIP,
+		SSLEnabled: sslEnabled == "true",
+		AppPort:    appPort,
+		ProxyPort:  6432,
 	}
 
 	if domain != "" {

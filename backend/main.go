@@ -2550,5 +2550,25 @@ func main() {
 		})
 	})
 
-	r.Run(":8080")
+	// Serve static files from frontend/dist if it exists
+	// This will serve the built Vite app in a production container
+	if _, err := os.Stat("./frontend/dist"); err == nil {
+		r.StaticFS("/assets", http.Dir("./frontend/dist/assets"))
+		r.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
+		r.StaticFile("/vite.svg", "./frontend/dist/vite.svg")
+
+		// Catch-all route for SPA: serve index.html for any other route
+		r.NoRoute(func(c *gin.Context) {
+			if !strings.HasPrefix(c.Request.URL.Path, "/api") && !strings.HasPrefix(c.Request.URL.Path, "/uploads") {
+				c.File("./frontend/dist/index.html")
+			}
+		})
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	fmt.Printf("Baseful is running on port %s\n", port)
+	r.Run(":" + port)
 }

@@ -101,7 +101,7 @@ success "✓ Dependencies are ready."
 # 3. Environment Configuration
 info "[3/6] Configuring environment..."
 
-ENV_FILE="backend/.env"
+ENV_FILE=".env"
 ENV_EXAMPLE="backend/.env.example"
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -182,8 +182,7 @@ printf "\n\033[1;32m🚀 Baseful has been successfully installed!\033[0m\n"
 cat << "EOF"
 ------------------------------------------------
 EOF
-printf "\033[1mDashboard:\033[0m    http://%s:3000\n" "$PUBLIC_IP"
-printf "\033[1mBackend API:\033[0m  http://%s:8080\n" "$PUBLIC_IP"
+printf "\033[1mDashboard:\033[0m    http://%s:3002\n" "$PUBLIC_IP"
 printf "\033[1mDatabase Proxy:\033[0m %s:6432\n" "$PUBLIC_IP"
 cat << "EOF"
 ------------------------------------------------
