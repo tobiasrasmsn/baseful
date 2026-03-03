@@ -329,7 +329,7 @@ export default function Backup() {
           )}
         </div>
       </div>
-      <Tabs defaultValue="overview" className="flex-1 flex flex-col p-12">
+      <Tabs defaultValue="overview" className="flex-1 flex flex-col p-6 md:p-12">
         <TabsList className="w-fit bg-neutral-900 border border-border">
           <TabsTrigger value="overview" className="gap-2">
             <ArchiveIcon /> Overview
