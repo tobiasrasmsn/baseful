@@ -49,12 +49,12 @@ EOF
 # 0. Check if we are already in a baseful directory
 if [ -f "docker-compose.yml" ] && grep -q "baseful-backend" "docker-compose.yml"; then
     info "Detected existing Baseful directory. Skipping clone..."
-    INSTALL_DIR=$(pwd)   # fix 1
-    cd "$INSTALL_DIR"    # fix 2
+    INSTALL_DIR=$(pwd)
+    cd "$INSTALL_DIR"
 else
     # 2. Clone Repository
     info "[2/6] Cloning Baseful repository..."
-    if [ -d "$INSTALL_DIR" ]; then
+    if [ -d "$INSTALL_DIR/.git" ]; then
         warn "Warning: Directory $INSTALL_DIR already exists. Updating..."
         cd "$INSTALL_DIR"
         git pull
