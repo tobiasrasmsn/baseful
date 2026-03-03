@@ -86,12 +86,11 @@ export default function Security() {
     return (
         <div className="flex flex-col h-full relative">
             {/* Header */}
-            <header className="flex-shrink-0 border-b border-white/[0.08] bg-white/[0.02] px-8 py-5 flex items-center gap-3">
+            <header className="flex-shrink-0 border-b px-8 py-5 flex items-center gap-3">
                 <h1 className="text-xl font-medium text-neutral-100 tracking-tight">
-                    System Overview
+                    Security & Updates
                 </h1>
-                <span className="text-neutral-600 font-light hidden sm:inline">/</span>
-                <span className="text-md text-neutral-400">Security & Updates</span>
+
             </header>
 
             {/* Main Content */}
@@ -112,7 +111,7 @@ export default function Security() {
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             {/* Status Card */}
-                            <div className="p-5 rounded-xl border border-white/[0.08] bg-[#0c0c0e] space-y-4">
+                            <div className="p-5 rounded-xl border border-white/[0.08] bg-card space-y-4">
                                 <div className="flex items-center gap-2 text-xs font-medium text-neutral-500 uppercase tracking-wider">
                                     <ShieldCheck size={16} className="text-blue-400" />
                                     Current Status
@@ -133,7 +132,7 @@ export default function Security() {
                             </div>
 
                             {/* Version Card */}
-                            <div className="p-5 rounded-xl border border-white/[0.08] bg-[#0c0c0e] space-y-4">
+                            <div className="p-5 rounded-xl border border-white/[0.08] bg-card space-y-4">
                                 <div className="flex items-center gap-2 text-xs font-medium text-neutral-500 uppercase tracking-wider">
                                     <Tag size={16} className="text-purple-400" />
                                     Current Version (Hash)
@@ -144,7 +143,7 @@ export default function Security() {
                             </div>
 
                             {/* Last Checked Card */}
-                            <div className="p-5 rounded-xl border border-white/[0.08] bg-[#0c0c0e] space-y-4">
+                            <div className="p-5 rounded-xl border border-white/[0.08] bg-card space-y-4">
                                 <div className="flex items-center gap-2 text-xs font-medium text-neutral-500 uppercase tracking-wider">
                                     <Clock size={16} className="text-neutral-400" />
                                     Last Checked
