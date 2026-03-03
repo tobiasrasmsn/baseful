@@ -137,42 +137,46 @@ func RunUpdate() error {
 	db.UpdateSetting("system_is_updating", "true")
 	db.UpdateSetting("system_update_target_hash", remoteHash)
 
+	fmt.Printf("Starting system update to hash: %s\n", remoteHash)
+
 	// 0. Ensure git safe directory
 	exec.Command("git", "config", "--global", "--add", "safe.directory", "/repo").Run()
 
 	// 1. Pull latest code
+	fmt.Println("Pulling latest code...")
 	pullCmd := exec.Command("git", "-C", "/repo", "pull", "origin", "main")
 	if out, err := pullCmd.CombinedOutput(); err != nil {
+		fmt.Printf("Git pull failed: %v, output: %s\n", err, string(out))
 		statusMutex.Lock()
 		currentStatus.UpdatingStatus = false
 		statusMutex.Unlock()
-		return fmt.Errorf("git pull failed: %v, output: %s", err, string(out))
+		db.UpdateSetting("system_is_updating", "false")
+		return fmt.Errorf("git pull failed: %v", err)
 	}
 
-	// 2. Build new images
-	buildCmd := exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "build")
-	if _, err := buildCmd.CombinedOutput(); err != nil {
-		buildCmd = exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "build")
-		if out, err := buildCmd.CombinedOutput(); err != nil {
-			statusMutex.Lock()
-			currentStatus.UpdatingStatus = false
-			statusMutex.Unlock()
-			return fmt.Errorf("docker build failed: %v, output: %s", err, string(out))
-		}
-	}
-
-	statusMutex.Lock()
-	currentStatus.UpdatingStatus = false
-	statusMutex.Unlock()
-
-	// 3. Swap to new version
+	// 2. Schedule restart (up --build)
+	// We do this in a goroutine because it will eventually kill this process
 	go func() {
 		// Wait a second for the response to reach the frontend
-		time.Sleep(1 * time.Second)
-		upCmd := exec.Command("docker", "compose", "-f", "/repo/docker-compose.yml", "up", "-d", "--build", "--remove-orphans")
-		if _, err := upCmd.CombinedOutput(); err != nil {
-			upCmd = exec.Command("docker-compose", "-f", "/repo/docker-compose.yml", "up", "-d", "--build", "--remove-orphans")
-			upCmd.Run()
+		time.Sleep(2 * time.Second)
+		fmt.Println("Executing docker compose up -d --build...")
+
+		// Use --build directly in up to consolidate steps
+		args := []string{"-f", "/repo/docker-compose.yml", "up", "-d", "--build", "--remove-orphans"}
+
+		upCmd := exec.Command("docker", append([]string{"compose"}, args...)...)
+		if out, err := upCmd.CombinedOutput(); err != nil {
+			fmt.Printf("Docker compose up failed (trying docker-compose): %v, output: %s\n", err, string(out))
+			up2 := exec.Command("docker-compose", args...)
+			if out2, err2 := up2.CombinedOutput(); err2 != nil {
+				fmt.Printf("Docker-compose up failed: %v, output: %s\n", err2, string(out2))
+				// If it fails, we should clear the flag so the UI isn't stuck
+				db.UpdateSetting("system_is_updating", "false")
+			} else {
+				fmt.Println("System update triggered successfully (docker-compose).")
+			}
+		} else {
+			fmt.Println("System update triggered successfully (docker).")
 		}
 	}()
 
