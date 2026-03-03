@@ -7,8 +7,11 @@
 set -e
 
 # --- Configuration ---
-INSTALL_DIR="baseful"
+INSTALL_DIR="/opt/baseful"
 GITHUB_REPO="https://github.com/tobiasrasmsn/baseful.git"
+# Create install directory with correct permissions
+sudo mkdir -p "$INSTALL_DIR"
+sudo chown $(whoami):$(whoami) "$INSTALL_DIR"
 
 # --- Colors for output ---
 RED='\033[0;31m'
@@ -46,7 +49,8 @@ EOF
 # 0. Check if we are already in a baseful directory
 if [ -f "docker-compose.yml" ] && grep -q "baseful-backend" "docker-compose.yml"; then
     info "Detected existing Baseful directory. Skipping clone..."
-    INSTALL_DIR="."
+    INSTALL_DIR=$(pwd)   # fix 1
+    cd "$INSTALL_DIR"    # fix 2
 else
     # 2. Clone Repository
     info "[2/6] Cloning Baseful repository..."

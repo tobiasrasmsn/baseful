@@ -10,6 +10,8 @@ import {
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { SquareArrowOutUpRight } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface DomainStatus {
   configured: boolean;
@@ -17,6 +19,7 @@ interface DomainStatus {
 }
 
 export default function DomainSetup() {
+  const { token, logout } = useAuth();
   const [domainStatus, setDomainStatus] = useState<DomainStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -24,7 +27,7 @@ export default function DomainSetup() {
   useEffect(() => {
     const fetchDomainStatus = async () => {
       try {
-        const res = await fetch("/api/system/domain");
+        const res = await authFetch("/api/system/domain", token, {}, logout);
         if (res.ok) {
           const data = await res.json();
           setDomainStatus(data);

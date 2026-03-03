@@ -21,6 +21,8 @@ import {
 import { PlusIcon } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface Project {
   id: number;
@@ -51,22 +53,36 @@ export default function CreateDatabaseDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { token, logout } = useAuth();
+
   useEffect(() => {
-    if (open) {
+    if (open && token) {
       fetchProjects();
     }
-  }, [open]);
+  }, [open, token]);
 
   const fetchProjects = async () => {
+    if (!token) return;
     try {
-      const response = await fetch("/api/projects");
+      const response = await authFetch("/api/projects", token, {}, logout);
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+
       const data = await response.json();
-      setProjects(data);
-      if (data.length > 0 && !projectId) {
-        setProjectId(String(data[0].id));
+      if (Array.isArray(data)) {
+        setProjects(data);
+        if (data.length > 0 && !projectId) {
+          setProjectId(String(data[0].id));
+        }
+      } else {
+        setProjects([]);
       }
     } catch (err) {
       console.error("Failed to fetch projects:", err);
+      setProjects([]);
     }
   };
 
@@ -82,7 +98,7 @@ export default function CreateDatabaseDialog({
     }
 
     try {
-      const response = await fetch("/api/databases", {
+      const response = await authFetch("/api/databases", token, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -96,7 +112,12 @@ export default function CreateDatabaseDialog({
           maxRamMb,
           maxStorageMb,
         }),
-      });
+      }, logout);
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
 
       if (!response.ok) {
         const data = await response.json();

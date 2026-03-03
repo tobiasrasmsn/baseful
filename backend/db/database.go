@@ -111,6 +111,22 @@ func InitDB() error {
         value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        first_name TEXT,
+        last_name TEXT,
+        is_admin BOOLEAN DEFAULT 0,
+        avatar_url TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS whitelisted_emails (
+        email TEXT PRIMARY KEY,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- Insert default settings if they don't exist
     INSERT OR IGNORE INTO settings (key, value) VALUES ('metrics_enabled', 'true');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('metrics_sample_rate', '5');
@@ -170,6 +186,25 @@ func InitDB() error {
 
 	// Migration: Add mapped_port for local dev access (running proxy on host)
 	DB.Exec("ALTER TABLE databases ADD COLUMN mapped_port INTEGER DEFAULT 0")
+
+	// Migration: Ensure users and whitelisted_emails tables exist (redundant but safe)
+	DB.Exec(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        first_name TEXT,
+        last_name TEXT,
+        is_admin BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`)
+	// Migration: Add names if they don't exist
+	DB.Exec("ALTER TABLE users ADD COLUMN first_name TEXT")
+	DB.Exec("ALTER TABLE users ADD COLUMN last_name TEXT")
+	DB.Exec("ALTER TABLE users ADD COLUMN avatar_url TEXT")
+	DB.Exec(`CREATE TABLE IF NOT EXISTS whitelisted_emails (
+        email TEXT PRIMARY KEY,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`)
 
 	return nil
 }

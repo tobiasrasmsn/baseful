@@ -13,8 +13,12 @@ import {
   ArrowClockwise,
   SpinnerIcon,
   LockIcon,
+  SignOut,
+  Trash,
+  UsersIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { Link, useLocation } from "react-router-dom";
 import {
   Popover,
@@ -27,6 +31,7 @@ import CreateProjectDialog from "@/components/project/CreateProjectDialog";
 import { useDatabase } from "@/context/DatabaseContext";
 import { useProject } from "@/context/ProjectContext";
 import { DitherAvatar } from "../ui/hash-avatar";
+import { authFetch } from "@/lib/api";
 
 const AuroraOverlay = () => (
   <div className="fixed inset-0 z-[9999] pointer-events-auto flex items-center justify-center overflow-hidden">
@@ -53,6 +58,7 @@ export default function Sidebar() {
   const { selectedDatabase, setSelectedDatabase, databases, refreshDatabases } =
     useDatabase();
   const { projects, refreshProjects } = useProject();
+  const { user, token, logout, resetAdmin } = useAuth();
   const location = useLocation();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -69,8 +75,10 @@ export default function Sidebar() {
 
   useEffect(() => {
     const checkUpdates = async () => {
+      if (!token) return;
       try {
-        const res = await fetch("/api/system/update-status");
+        const res = await authFetch("/api/system/update-status", token, {}, logout);
+        if (!res.ok) throw new Error("Status failed");
         const data = await res.json();
 
         // If we just finished an update (detected by localStorage),
@@ -97,8 +105,10 @@ export default function Sidebar() {
     let pollInterval: any;
     if (updateStatus?.updatingStatus || isUpdating) {
       pollInterval = setInterval(async () => {
+        if (!token) return;
         try {
-          const res = await fetch("/api/system/update-status");
+          const res = await authFetch("/api/system/update-status", token, {}, logout);
+          if (!res.ok) throw new Error("Status failed");
           const data = await res.json();
 
           // If the hash changed, the update finished and system restarted!
@@ -133,7 +143,7 @@ export default function Sidebar() {
       clearInterval(interval);
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [updateStatus?.updatingStatus, isUpdating, updateStatus?.currentHash]);
+  }, [updateStatus?.updatingStatus, isUpdating, updateStatus?.currentHash, token]);
 
   useEffect(() => {
     const pathParts = location.pathname.split("/");
@@ -189,7 +199,7 @@ export default function Sidebar() {
     setIsUpdating(true);
     localStorage.setItem("baseful_is_updating", "true");
     try {
-      const res = await fetch("/api/system/update", { method: "POST" });
+      const res = await authFetch("/api/system/update", token, { method: "POST" }, logout);
       if (!res.ok) throw new Error("Update failed");
       // No alert needed, the UI will show the updating state
     } catch (e) {
@@ -200,7 +210,7 @@ export default function Sidebar() {
 
   const handleManualCheck = async () => {
     try {
-      const res = await fetch("/api/system/update-check", { method: "POST" });
+      const res = await authFetch("/api/system/update-check", token, { method: "POST" }, logout);
       const data = await res.json();
       setUpdateStatus(data);
     } catch (e) {
@@ -554,14 +564,75 @@ export default function Sidebar() {
             </ul>
           </div>
         )}
+
+        {user?.isAdmin && (
+          <div>
+            <h2 className="text-xs font-medium text-neutral-400 mb-3 px-2.5">
+              ADMIN
+            </h2>
+            <ul className="flex flex-col gap-1">
+              <li
+                className={`py-1.5 px-2.5 rounded-md ${location.pathname === "/users" ? "bg-muted/50" : ""
+                  }`}
+              >
+                <Link
+                  to="/users"
+                  className="text-neutral-100 text-sm flex flex-row items-center gap-2"
+                >
+                  <UsersIcon
+                    size={18}
+                    weight="bold"
+                    className="text-neutral-400"
+                  />
+                  <span>Users & Whitelist</span>
+                </Link>
+              </li>
+            </ul>
+          </div>
+        )}
       </nav>
 
       {/* Update Status Banner */}
-      <div className="mt-auto pt-4">
+      <div className="mt-auto pt-4 flex flex-col gap-4">
+        {/* User Profile Section */}
+        {user && (
+          <div className="px-2 py-3 mt-4 flex flex-col gap-2">
+            <Link
+              to="/settings/profile"
+              className="flex items-center gap-3 hover:bg-muted/30 p-1 -m-1 rounded-md transition-colors"
+            >
+              {user.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  className="size-8 rounded-sm object-cover bg-muted"
+                  alt=""
+                />
+              ) : (
+                <Facehash
+                  name={user.email}
+                  size={32}
+                  colorClasses={["bg-orange-600", "bg-blue-600", "bg-lime-600", "bg-purple-600"]}
+                  className="rounded-sm"
+                />
+              )}
+              <div className="flex flex-col min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {user.firstName} {user.lastName}
+                </p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {user.email}
+                </p>
+              </div>
+            </Link>
+
+
+          </div>
+        )}
+
         {updateStatus?.available && (
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 group animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="z-100 fixed bottom-5 right-5 bg-neutral-900 border border-border rounded-lg p-3 group animate-in fade-in slide-in-from-bottom-2 duration-500">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm font-medium text-blue-400">
+              <span className="text-base font-medium">
                 New Version Available!
               </span>
             </div>
@@ -578,26 +649,6 @@ export default function Sidebar() {
             </button>
           </div>
         )}
-
-        <div className="px-2.5 flex items-center justify-between text-[10px] text-neutral-500">
-          <div className="flex items-center gap-2">
-            <span>v1.0.0</span>
-            <button
-              onClick={handleManualCheck}
-              disabled={updateStatus?.checkingStatus}
-              className="hover:text-blue-400 transition-colors disabled:opacity-50"
-              title="Check for updates"
-            >
-              <ArrowClockwise
-                size={10}
-                className={updateStatus?.checkingStatus ? "animate-spin" : ""}
-              />
-            </button>
-          </div>
-          <span className="opacity-50">
-            {updateStatus?.currentHash?.slice(0, 7) || "dev"}
-          </span>
-        </div>
       </div>
     </div>
   );

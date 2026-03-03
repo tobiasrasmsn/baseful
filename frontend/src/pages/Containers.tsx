@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
+import { Container } from "lucide-react";
 
 interface ContainerInfo {
     id: string;
@@ -23,6 +26,7 @@ interface ContainerInfo {
 }
 
 export default function Containers() {
+    const { token, logout } = useAuth();
     const [containers, setContainers] = useState<ContainerInfo[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -50,7 +54,7 @@ export default function Containers() {
     const fetchContainers = async () => {
         try {
             setLoading(true);
-            const response = await fetch("/api/docker/containers");
+            const response = await authFetch("/api/docker/containers", token, {}, logout);
             if (!response.ok) throw new Error("Failed to fetch containers");
             const data = await response.json();
             setContainers(data);
@@ -89,11 +93,11 @@ export default function Containers() {
         setCommand("");
 
         try {
-            const response = await fetch(`/api/docker/containers/${containerId}/exec`, {
+            const response = await authFetch(`/api/docker/containers/${containerId}/exec`, token, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ command: cmd, cwd: cwd }),
-            });
+            }, logout);
 
             const data = await response.json();
 
@@ -318,7 +322,7 @@ export default function Containers() {
                     </div>
                 ) : (
                     containers.map((container) => (
-                        <Card key={container.id} className="group flex flex-col justify-between bg-card hover:bg-zinc-50 dark:hover:bg-zinc-900/50 border-border transition-colors duration-200">
+                        <Card key={container.id} className="overflow-hidden group flex flex-col justify-between bg-card hover:bg-zinc-50 dark:hover:bg-zinc-900/50 border-border transition-colors duration-200">
                             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                                 <div className="flex flex-col gap-1">
                                     <div className="flex items-center gap-2">

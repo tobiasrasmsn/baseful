@@ -4,6 +4,22 @@ import { TableIcon } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
 import { Facehash } from "facehash";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 
 interface TableInfo {
   name: string;
@@ -26,6 +42,7 @@ interface TableData {
 export default function Tables() {
   const { id } = useParams<{ id: string }>();
   const { selectedDatabase } = useDatabase();
+  const { token, logout } = useAuth();
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,27 +52,18 @@ export default function Tables() {
   const [selectedTable, setSelectedTable] = useState<TableData | null>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [editedCells, setEditedCells] = useState<Record<string, unknown>>({});
-  const [originalValues, setOriginalValues] = useState<Record<string, unknown>>(
-    {},
-  );
   const [isSaving, setIsSaving] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
 
+  // Search filter state
+  const [filterCol, setFilterCol] = useState<string>("");
+  const [filterOp, setFilterOp] = useState<string>("equals");
+  const [filterVal, setFilterVal] = useState<string>("");
+
   const hasChanges = Object.keys(editedCells).length > 0;
 
-  const handleCellDoubleClick = (
-    rowIndex: number,
-    columnName: string,
-    value: unknown,
-  ) => {
-    const cellKey = `${rowIndex}|||${columnName}`;
-    if (!originalValues[cellKey]) {
-      setOriginalValues((prev) => ({ ...prev, [cellKey]: value }));
-    }
-    setEditedCells((prev) => ({ ...prev, [cellKey]: value }));
-  };
 
   const handleCellChange = (
     rowIndex: number,
@@ -87,20 +95,21 @@ export default function Tables() {
 
       console.log("Sending updates:", { primaryKey, updates });
 
-      const res = await fetch(
+      const res = await authFetch(
         `/api/databases/${id}/tables/${selectedTable.name}/rows`,
+        token,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ primaryKey, updates }),
         },
+        logout
       );
 
       if (!res.ok) throw new Error("Failed to save changes");
 
       setEditedCells({});
-      setOriginalValues({});
-      fetchTableData(selectedTable.name);
+      if (selectedTable?.name) fetchTableData(selectedTable.name);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save changes");
     } finally {
@@ -110,7 +119,6 @@ export default function Tables() {
 
   const handleDiscard = () => {
     setEditedCells({});
-    setOriginalValues({});
   };
 
   useEffect(() => {
@@ -125,7 +133,7 @@ export default function Tables() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/databases/${id}/tables`);
+      const res = await authFetch(`/api/databases/${id}/tables`, token, {}, logout);
       if (!res.ok) throw new Error("Failed to fetch tables");
       const data = await res.json();
       setTables(data || []);
@@ -140,15 +148,34 @@ export default function Tables() {
     tableName: string,
     page: number = 1,
     limit: number = 100,
+    fCol?: string,
+    fOp?: string,
+    fVal?: string,
   ) => {
+    // Reset filters if we are switching to a different table
+    if (tableName !== selectedTableName) {
+      setFilterCol("");
+      setFilterOp("equals");
+      setFilterVal("");
+    }
+
     setSelectedTableName(tableName);
     setTableLoading(true);
     setSelectedTable(null);
     try {
       const offset = (page - 1) * limit;
-      const res = await fetch(
-        `/api/databases/${id}/tables/${tableName}?offset=${offset}&limit=${limit}`,
-      );
+      let url = `/api/databases/${id}/tables/${tableName}?offset=${offset}&limit=${limit}`;
+
+      // Use provided args or current state
+      const col = fCol !== undefined ? fCol : filterCol;
+      const op = fOp !== undefined ? fOp : filterOp;
+      const val = fVal !== undefined ? fVal : filterVal;
+
+      if (col && op && val) {
+        url += `&filterCol=${encodeURIComponent(col)}&filterOp=${encodeURIComponent(op)}&filterVal=${encodeURIComponent(val)}`;
+      }
+
+      const res = await authFetch(url, token, {}, logout);
       if (!res.ok) throw new Error("Failed to fetch table data");
       const data = await res.json();
       setSelectedTable(data || null);
@@ -220,7 +247,7 @@ export default function Tables() {
               {tables?.map((table, i) => (
                 <button
                   key={i}
-                  onClick={() => fetchTableData(table.name)}
+                  onClick={() => table.name && fetchTableData(table.name)}
                   className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${selectedTableName === table.name ? "bg-muted/75" : ""
                     }`}
                 >
@@ -264,8 +291,8 @@ export default function Tables() {
             ) : (
               <>
                 {/* Table header */}
-                <div className="p-4 border-b border-border">
-                  <div className="flex flex-row items-center justify-between gap-3">
+                <div className="border-b border-border">
+                  <div className="flex flex-row items-center justify-between gap-3 p-4">
                     <div>
                       <h2 className="text-2xl font-medium text-neutral-100">
                         {selectedTable.name}
@@ -294,6 +321,122 @@ export default function Tables() {
                       </div>
                     )}
                   </div>
+
+                  {/* Filter UI */}
+                  <div className="flex flex-row items-center border-t">
+                    <div className="flex flex-col items-start gap-1.5 h-full">
+
+                      <Select value={filterCol} onValueChange={setFilterCol}>
+                        <SelectTrigger size="sm" className="w-[180px] h-8 bg-transparent! rounded-none! border-border border-y-0! border-r! border-l-0!">
+                          <SelectValue placeholder="Column" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {selectedTable.columns.map((col) => (
+                            <SelectItem key={col.name} value={col.name}>
+                              {col.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col items-start gap-1.5">
+
+                      <Select value={filterOp} onValueChange={setFilterOp}>
+                        <SelectTrigger size="sm" className="w-[180px] h-8 bg-transparent! rounded-none! border-border border-y-0! border-r! border-l-0!">
+                          <SelectValue placeholder="Operator" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="equals">Equals</SelectItem>
+                          <SelectItem value="contains">Contains</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1 flex flex-row items-center border-none h-8 min-w-0">
+                      <div className="flex-1 flex flex-row items-center px-1">
+                        {(() => {
+                          const col = selectedTable.columns.find((c) => c.name === filterCol);
+                          const columnType = col?.type?.toLowerCase() || "";
+
+                          const isBool =
+                            columnType.includes("bool") ||
+                            columnType.includes("boolean");
+
+                          const isNumeric = [
+                            "integer",
+                            "int",
+                            "int4",
+                            "bigint",
+                            "int8",
+                            "smallint",
+                            "int2",
+                            "numeric",
+                            "decimal",
+                            "real",
+                            "double precision",
+                          ].some((t) => columnType.includes(t));
+
+                          const isDate =
+                            columnType.includes("date") ||
+                            columnType.includes("timestamp");
+
+                          if (isBool) {
+                            return (
+                              <Select
+                                value={filterVal}
+                                onValueChange={(val) => {
+                                  setFilterVal(val);
+                                  fetchTableData(selectedTable.name, 1, rowsPerPage, filterCol, filterOp, val);
+                                }}
+                              >
+                                <SelectTrigger size="sm" className="h-8 bg-transparent! rounded-none! border-none! flex-1 text-left">
+                                  <SelectValue placeholder="Select TRUE/FALSE" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="true">TRUE</SelectItem>
+                                  <SelectItem value="false">FALSE</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            );
+                          }
+
+                          return (
+                            <Input
+                              type={isNumeric ? "number" : isDate ? (columnType.includes("timestamp") ? "datetime-local" : "date") : "text"}
+                              value={filterVal}
+                              onChange={(e) => setFilterVal(e.target.value)}
+                              placeholder="Value..."
+                              className="h-8 bg-transparent! focus:ring-0! focus:border-border! focus:outline-none! rounded-none! border-none! text-xs flex-1"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  fetchTableData(selectedTable.name, 1, rowsPerPage);
+                                }
+                              }}
+                            />
+                          );
+                        })()}
+                      </div>
+                      <div className="flex flex-row shrink-0 border-l border-border h-8">
+                        <button
+                          onClick={() => fetchTableData(selectedTable.name, 1, rowsPerPage)}
+                          className="h-full px-4 text-xs font-medium text-background bg-primary hover:bg-primary transition-colors shrink-0"
+                        >
+                          Search
+                        </button>
+                        {(filterCol || filterVal) && (
+                          <button
+                            onClick={() => {
+                              setFilterCol("");
+                              setFilterVal("");
+                              fetchTableData(selectedTable.name, 1, rowsPerPage, "", "equals", "");
+                            }}
+                            className="h-full px-4 bg-neutral-800! text-xs font-medium text-neutral-400 hover:text-neutral-200 transition-colors border-l border-border/50"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -307,12 +450,12 @@ export default function Tables() {
                       <>
                         <div className="flex-1 overflow-auto">
                           <table className="w-full text-sm">
-                            <thead className="bg-transparent">
-                              <tr className="border-b border-border sticky top-0">
+                            <thead className="bg-transparent!">
+                              <tr className="border-b! bg-transparent! border-border! sticky top-0">
                                 {selectedTable.columns?.map((col, i) => (
                                   <th
                                     key={i}
-                                    className="text-left py-2 px-4 text-neutral-400 font-medium bg-card"
+                                    className="text-left bg-[#141414]! py-2 px-2 text-neutral-400 font-medium border-l border-border first:border-l-0"
                                   >
                                     {col.name}
                                   </th>
@@ -330,37 +473,183 @@ export default function Tables() {
                                     const value =
                                       editedCells[cellKey] ?? row[col.name];
                                     const isEdited = cellKey in editedCells;
+                                    const columnType = col.type.toLowerCase();
+                                    const isNullable = col.nullable === "YES";
+
+                                    const renderInput = () => {
+                                      const isBool =
+                                        columnType === "boolean" ||
+                                        columnType === "bool";
+
+                                      if (isBool) {
+                                        return (
+                                          <Select
+                                            value={
+                                              value === null
+                                                ? "NULL"
+                                                : value === true ||
+                                                  value === "true" ||
+                                                  value === "t" ||
+                                                  value === 1 ||
+                                                  value === "1"
+                                                  ? "true"
+                                                  : "false"
+                                            }
+                                            onValueChange={(val) =>
+                                              handleCellChange(
+                                                i,
+                                                col.name,
+                                                val === "NULL"
+                                                  ? null
+                                                  : val === "true",
+                                              )
+                                            }
+                                          >
+                                            <SelectTrigger
+                                              size="sm"
+                                              className="h-fit! py-1! w-full border-none bg-transparent px-1 font-mono text-xs focus:ring-0 focus:ring-offset-0 shadow-none hover:bg-neutral-800/30"
+                                            >
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="true">
+                                                TRUE
+                                              </SelectItem>
+                                              <SelectItem value="false">
+                                                FALSE
+                                              </SelectItem>
+                                              {isNullable && (
+                                                <SelectItem value="NULL">
+                                                  NULL
+                                                </SelectItem>
+                                              )}
+                                            </SelectContent>
+                                          </Select>
+                                        );
+                                      }
+
+                                      const isNumeric = [
+                                        "integer",
+                                        "int",
+                                        "int4",
+                                        "bigint",
+                                        "int8",
+                                        "smallint",
+                                        "int2",
+                                        "numeric",
+                                        "decimal",
+                                        "real",
+                                        "double precision",
+                                      ].some((t) => columnType.includes(t));
+
+                                      const isDate =
+                                        columnType.includes("date") ||
+                                        columnType.includes("timestamp");
+
+                                      return (
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <button
+                                              className={`h-7 w-full border-none bg-transparent px-1 font-mono text-xs text-left truncate focus:outline-none hover:bg-neutral-800/30 rounded transition-colors ${isEdited ? "text-blue-300" : "text-neutral-200"
+                                                }`}
+                                            >
+                                              {value === null ? (
+                                                <span className="text-neutral-600 italic">
+                                                  NULL
+                                                </span>
+                                              ) : (
+                                                String(value)
+                                              )}
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-80 p-3 bg-neutral-900 border-neutral-700">
+                                            <div className="flex flex-col gap-2">
+                                              <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+                                                Edit {col.name} ({columnType})
+                                              </div>
+                                              {!isBool && !isNumeric && !isDate ? (
+                                                <Textarea
+                                                  value={
+                                                    value === null
+                                                      ? ""
+                                                      : String(value)
+                                                  }
+                                                  onChange={(e) =>
+                                                    handleCellChange(
+                                                      i,
+                                                      col.name,
+                                                      e.target.value === "" &&
+                                                        isNullable
+                                                        ? null
+                                                        : e.target.value,
+                                                    )
+                                                  }
+                                                  className="font-mono text-xs bg-neutral-950 border-neutral-800 min-h-[100px]"
+                                                  placeholder={
+                                                    isNullable ? "NULL" : ""
+                                                  }
+                                                />
+                                              ) : (
+                                                <Input
+                                                  type={
+                                                    isNumeric
+                                                      ? "number"
+                                                      : isDate
+                                                        ? columnType.includes(
+                                                          "time",
+                                                        )
+                                                          ? "datetime-local"
+                                                          : "date"
+                                                        : "text"
+                                                  }
+                                                  value={
+                                                    value === null
+                                                      ? ""
+                                                      : String(value)
+                                                  }
+                                                  onChange={(e) =>
+                                                    handleCellChange(
+                                                      i,
+                                                      col.name,
+                                                      e.target.value === "" &&
+                                                        isNullable
+                                                        ? null
+                                                        : e.target.value,
+                                                    )
+                                                  }
+                                                  className="font-mono text-xs bg-neutral-950 border-neutral-800"
+                                                  autoFocus
+                                                  placeholder={
+                                                    isNullable ? "NULL" : ""
+                                                  }
+                                                />
+                                              )}
+                                              {isNullable && value !== null && (
+                                                <button
+                                                  onClick={() =>
+                                                    handleCellChange(
+                                                      i,
+                                                      col.name,
+                                                      null,
+                                                    )
+                                                  }
+                                                  className="text-[10px] text-neutral-500 hover:text-red-400 text-left transition-colors"
+                                                >
+                                                  Set to NULL
+                                                </button>
+                                              )}
+                                            </div>
+                                          </PopoverContent>
+                                        </Popover>
+                                      );
+                                    };
+
                                     return (
                                       <td
                                         key={j}
-                                        className={`py-2 px-4 font-mono text-xs max-w-xs truncate border-l border-transparent ${isEdited ? "" : ""
-                                          }`}
-                                        onDoubleClick={() =>
-                                          handleCellDoubleClick(
-                                            i,
-                                            col.name,
-                                            row[col.name],
-                                          )
-                                        }
+                                        className="py-0.5 px-0 font-mono text-xs border-l border-transparent min-w-[60px] max-w-[200px] truncate"
                                       >
-                                        <input
-                                          type="text"
-                                          value={
-                                            value === null ? "" : String(value)
-                                          }
-                                          onChange={(e) =>
-                                            handleCellChange(
-                                              i,
-                                              col.name,
-                                              e.target.value,
-                                            )
-                                          }
-                                          className={`w-full bg-transparent border-none outline-none text-neutral-200 placeholder-neutral-600 ${isEdited ? "text-blue-200" : ""
-                                            }`}
-                                          placeholder={
-                                            value === null ? "NULL" : undefined
-                                          }
-                                        />
+                                        {renderInput()}
                                       </td>
                                     );
                                   })}
@@ -369,7 +658,7 @@ export default function Tables() {
                             </tbody>
                           </table>
                         </div>
-                        <div className="p-3 border-t border-border flex items-center justify-between bg-neutral-800/30 shrink-0">
+                        <div className="p-3 border-t border-border flex items-center justify-between bg-neutral-900 shrink-0">
                           <div className="flex items-center gap-4">
                             <span className="text-xs text-neutral-500">
                               Showing{" "}
@@ -392,7 +681,7 @@ export default function Tables() {
                                   setRowsPerPage(newLimit);
                                   setCurrentPage(1);
                                   fetchTableData(
-                                    selectedTable.name,
+                                    selectedTable?.name,
                                     1,
                                     newLimit,
                                   );

@@ -12,10 +12,13 @@ import (
 
 // JWTClaims represents the claims in the JWT token
 type JWTClaims struct {
-	DatabaseID int    `json:"database_id"`
+	DatabaseID int    `json:"database_id,omitempty"`
 	UserID     int    `json:"user_id,omitempty"`
-	TokenID    string `json:"token_id"`
-	Type       string `json:"type"`
+	Email      string `json:"email,omitempty"`
+	IsAdmin    bool   `json:"is_admin,omitempty"`
+	TokenID    string `json:"token_id,omitempty"`
+	Purpose    string `json:"purpose"` // "db_proxy" or "user_session"
+	Type       string `json:"type"`    // Legacy field, mapping to Purpose
 	jwt.RegisteredClaims
 }
 
@@ -53,7 +56,7 @@ func GenerateTokenID() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// GenerateJWT generates a new JWT token for a database
+// GenerateJWT generates a new JWT token for a database (Legacy proxy token)
 func GenerateJWT(databaseID int, userID int, tokenID string) (string, error) {
 	secret := GetJWTSecret()
 
@@ -64,6 +67,7 @@ func GenerateJWT(databaseID int, userID int, tokenID string) (string, error) {
 		DatabaseID: databaseID,
 		UserID:     userID,
 		TokenID:    tokenID,
+		Purpose:    "db_proxy",
 		Type:       "database_access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
@@ -71,6 +75,31 @@ func GenerateJWT(databaseID int, userID int, tokenID string) (string, error) {
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    "baseful",
 			Subject:   fmt.Sprintf("db_%d", databaseID),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
+// GenerateUserJWT generates a session token for a user
+func GenerateUserJWT(userID int, email string, isAdmin bool) (string, error) {
+	secret := GetJWTSecret()
+
+	// Session expires in 7 days
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+
+	claims := JWTClaims{
+		UserID:  userID,
+		Email:   email,
+		IsAdmin: isAdmin,
+		Purpose: "user_session",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Issuer:    "baseful",
+			Subject:   fmt.Sprintf("user_%d", userID),
 		},
 	}
 

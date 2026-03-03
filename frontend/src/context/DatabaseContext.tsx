@@ -6,6 +6,8 @@ import {
   type ReactNode,
 } from "react";
 import { useParams } from "react-router-dom";
+import { useAuth } from "./AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface Database {
   id: number;
@@ -45,9 +47,18 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
   );
   const { id: urlDbId } = useParams<{ id: string }>();
 
+  const { token, logout } = useAuth();
+
   const fetchDatabases = async () => {
+    if (!token) return;
     try {
-      const response = await fetch("/api/databases");
+      const response = await authFetch("/api/databases", token, {}, logout);
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+
       const data = await response.json();
       setDatabases(data || []);
 
@@ -69,8 +80,10 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
   };
 
   useEffect(() => {
-    fetchDatabases();
-  }, [urlDbId]);
+    if (token) {
+      fetchDatabases();
+    }
+  }, [urlDbId, token]);
 
   return (
     <DatabaseContext.Provider

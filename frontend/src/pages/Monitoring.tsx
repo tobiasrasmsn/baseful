@@ -4,6 +4,8 @@ import { Graph, Clock, Power, Check, Warning } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface MonitoringSettings {
   metrics_enabled: boolean;
@@ -18,6 +20,7 @@ interface Database {
 
 export default function Monitoring() {
   const { id } = useParams<{ id: string }>();
+  const { token, logout } = useAuth();
   const [, setDatabase] = useState<Database | null>(null);
   const [settings, setSettings] = useState<MonitoringSettings>({
     metrics_enabled: true,
@@ -41,7 +44,7 @@ export default function Monitoring() {
 
   const fetchDatabase = async () => {
     try {
-      const res = await fetch(`/api/databases/${id}`);
+      const res = await authFetch(`/api/databases/${id}`, token, {}, logout);
       if (!res.ok) throw new Error("Database not found");
       const data = await res.json();
       setDatabase(data);
@@ -52,7 +55,7 @@ export default function Monitoring() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch(`/api/settings`);
+      const res = await authFetch(`/api/settings`, token, {}, logout);
       if (res.ok) {
         const data = await res.json();
         setSettings(data);
@@ -71,11 +74,11 @@ export default function Monitoring() {
     setSuccess(null);
 
     try {
-      const res = await fetch(`/api/settings`, {
+      const res = await authFetch(`/api/settings`, token, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
-      });
+      }, logout);
 
       if (!res.ok) {
         throw new Error("Failed to update monitoring settings");
@@ -176,18 +179,16 @@ export default function Monitoring() {
                         metrics_enabled: !prev.metrics_enabled,
                       }))
                     }
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                      settings.metrics_enabled
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${settings.metrics_enabled
                         ? "bg-blue-600"
                         : "bg-neutral-700"
-                    }`}
+                      }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        settings.metrics_enabled
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.metrics_enabled
                           ? "translate-x-6"
                           : "translate-x-1"
-                      }`}
+                        }`}
                     />
                   </button>
                 </div>

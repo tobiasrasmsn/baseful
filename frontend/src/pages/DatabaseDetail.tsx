@@ -29,6 +29,8 @@ import {
 } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface Database {
   id: number;
@@ -74,13 +76,15 @@ export default function DatabaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { refreshDatabases } = useDatabase();
+  const { token, logout } = useAuth();
   const { data: settings } = useQuery({
-    queryKey: ["settings"],
+    queryKey: ["settings", token],
     queryFn: async () => {
-      const res = await fetch("/api/settings");
+      const res = await authFetch("/api/settings", token, {}, logout);
       if (!res.ok) throw new Error("Failed to fetch settings");
       return res.json();
     },
+    enabled: !!token,
     refetchInterval: 30000,
     staleTime: 1000 * 60 * 5,
   });
@@ -94,38 +98,38 @@ export default function DatabaseDetail() {
     error: databaseError,
     refetch: refetchDatabase,
   } = useQuery<Database>({
-    queryKey: ["database", id],
+    queryKey: ["database", id, token],
     queryFn: async () => {
-      const res = await fetch(`/api/databases/${id}`);
+      const res = await authFetch(`/api/databases/${id}`, token, {}, logout);
       if (!res.ok) throw new Error("Database not found");
       return res.json();
     },
-    enabled: !!id,
+    enabled: !!id && !!token,
     refetchInterval: 5000,
     staleTime: 1000 * 30,
   });
 
   const { data: metrics, isLoading: metricsLoading } =
     useQuery<DatabaseMetrics>({
-      queryKey: ["metrics", id],
+      queryKey: ["metrics", id, token],
       queryFn: async () => {
-        const res = await fetch(`/api/databases/${id}/metrics`);
+        const res = await authFetch(`/api/databases/${id}/metrics`, token, {}, logout);
         if (!res.ok) throw new Error("Failed to fetch metrics");
         return res.json();
       },
-      enabled: !!id && database?.status === "active",
+      enabled: !!id && !!token && database?.status === "active",
       refetchInterval: 5000,
       staleTime: 1000 * 5,
     });
 
   const { data: history = [] } = useQuery<MetricHistorySample[]>({
-    queryKey: ["history", id],
+    queryKey: ["history", id, token],
     queryFn: async () => {
-      const res = await fetch(`/api/databases/${id}/metrics/history`);
+      const res = await authFetch(`/api/databases/${id}/metrics/history`, token, {}, logout);
       if (!res.ok) throw new Error("Failed to fetch history");
       return res.json();
     },
-    enabled: !!id && database?.status === "active" && metricsEnabled,
+    enabled: !!id && !!token && database?.status === "active" && metricsEnabled,
     refetchInterval: 10000,
     staleTime: 1000 * 10,
   });
@@ -135,13 +139,13 @@ export default function DatabaseDetail() {
     max_ram_mb: number;
     max_storage_mb: number;
   }>({
-    queryKey: ["limits", id],
+    queryKey: ["limits", id, token],
     queryFn: async () => {
-      const res = await fetch(`/api/databases/${id}/limits`);
+      const res = await authFetch(`/api/databases/${id}/limits`, token, {}, logout);
       if (!res.ok) throw new Error("Failed to fetch limits");
       return res.json();
     },
-    enabled: !!id,
+    enabled: !!id && !!token,
   });
 
   const aggregatedHistory = useMemo(() => {
@@ -242,9 +246,9 @@ export default function DatabaseDetail() {
 
     setActionLoading(action);
     try {
-      const res = await fetch(`/api/databases/${id}/${action}`, {
+      const res = await authFetch(`/api/databases/${id}/${action}`, token, {
         method: "POST",
-      });
+      }, logout);
       if (!res.ok) {
         throw new Error(`Failed to ${action} database`);
       }
@@ -274,8 +278,11 @@ export default function DatabaseDetail() {
   const fetchConnectionString = async () => {
     setConnectionLoading(true);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/databases/${id}/connection-string?ssl=${useSSL}`,
+        token,
+        {},
+        logout
       );
       if (res.ok) {
         const data = await res.json();

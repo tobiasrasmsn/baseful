@@ -34,6 +34,8 @@ import {
 import { Facehash } from "facehash";
 import { useDatabase } from "@/context/DatabaseContext";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface BackupSettings {
   database_id: number;
@@ -62,6 +64,7 @@ export default function Backup() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { selectedDatabase } = useDatabase();
+  const { token, logout } = useAuth();
 
   const [settingsForm, setSettingsForm] = useState<BackupSettings>({
     database_id: parseInt(id || "0"),
@@ -76,13 +79,13 @@ export default function Backup() {
   });
 
   const { data: settings, isLoading: settingsLoading } = useQuery({
-    queryKey: ["backupSettings", id],
+    queryKey: ["backupSettings", id, token],
     queryFn: async () => {
-      const res = await fetch(`/api/databases/${id}/backups/settings`);
+      const res = await authFetch(`/api/databases/${id}/backups/settings`, token, {}, logout);
       if (!res.ok) throw new Error("Failed to fetch settings");
       return res.json() as Promise<BackupSettings>;
     },
-    enabled: !!id,
+    enabled: !!id && !!token,
   });
 
   useEffect(() => {
@@ -92,23 +95,23 @@ export default function Backup() {
   }, [settings]);
 
   const { data: backups, isLoading: backupsLoading } = useQuery({
-    queryKey: ["backups", id],
+    queryKey: ["backups", id, token],
     queryFn: async () => {
-      const res = await fetch(`/api/databases/${id}/backups`);
+      const res = await authFetch(`/api/databases/${id}/backups`, token, {}, logout);
       if (!res.ok) throw new Error("Failed to fetch backups");
       return res.json() as Promise<Backup[]>;
     },
-    enabled: !!id,
+    enabled: !!id && !!token,
     refetchInterval: 5000,
   });
 
   const saveSettingsMutation = useMutation({
     mutationFn: async (newSettings: BackupSettings) => {
-      const res = await fetch(`/api/databases/${id}/backups/settings`, {
+      const res = await authFetch(`/api/databases/${id}/backups/settings`, token, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newSettings),
-      });
+      }, logout);
       if (!res.ok) throw new Error("Failed to save settings");
       return res.json();
     },
@@ -123,9 +126,9 @@ export default function Backup() {
 
   const manualBackupMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/databases/${id}/backups/manual`, {
+      const res = await authFetch(`/api/databases/${id}/backups/manual`, token, {
         method: "POST",
-      });
+      }, logout);
       if (!res.ok) throw new Error("Failed to trigger backup");
       return res.json();
     },
@@ -142,11 +145,13 @@ export default function Backup() {
 
   const rollbackMutation = useMutation({
     mutationFn: async (backupId: number) => {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/databases/${id}/backups/${backupId}/restore`,
+        token,
         {
           method: "POST",
         },
+        logout
       );
       if (!res.ok) throw new Error("Failed to trigger restore");
       return res.json();
@@ -174,10 +179,10 @@ export default function Backup() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch(`/api/databases/${id}/restore/file`, {
+      const res = await authFetch(`/api/databases/${id}/restore/file`, token, {
         method: "POST",
         body: formData,
-      });
+      }, logout);
       if (!res.ok) throw new Error("Failed to restore from file");
       return res.json();
     },
@@ -193,11 +198,11 @@ export default function Backup() {
 
   const restoreFromConnectionMutation = useMutation({
     mutationFn: async (connStr: string) => {
-      const res = await fetch(`/api/databases/${id}/restore/connection`, {
+      const res = await authFetch(`/api/databases/${id}/restore/connection`, token, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ connection_string: connStr }),
-      });
+      }, logout);
       if (!res.ok) throw new Error("Failed to restore from connection");
       return res.json();
     },
@@ -591,8 +596,8 @@ export default function Backup() {
                   <button
                     onClick={() => setExternalRestoreMode("file")}
                     className={`flex-1 py-3 px-4 rounded-md border text-sm font-medium transition-colors ${externalRestoreMode === "file"
-                        ? "border-blue-500 bg-blue-500/10 text-blue-400"
-                        : "border-border bg-neutral-900 text-neutral-400 hover:text-neutral-200"
+                      ? "border-blue-500 bg-blue-500/10 text-blue-400"
+                      : "border-border bg-neutral-900 text-neutral-400 hover:text-neutral-200"
                       }`}
                   >
                     <UploadIcon className="inline-block mr-2" size={16} />
@@ -601,8 +606,8 @@ export default function Backup() {
                   <button
                     onClick={() => setExternalRestoreMode("connection")}
                     className={`flex-1 py-3 px-4 rounded-md border text-sm font-medium transition-colors ${externalRestoreMode === "connection"
-                        ? "border-blue-500 bg-blue-500/10 text-blue-400"
-                        : "border-border bg-neutral-900 text-neutral-400 hover:text-neutral-200"
+                      ? "border-blue-500 bg-blue-500/10 text-blue-400"
+                      : "border-border bg-neutral-900 text-neutral-400 hover:text-neutral-200"
                       }`}
                   >
                     <ClockCounterClockwiseIcon

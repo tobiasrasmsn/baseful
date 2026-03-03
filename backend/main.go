@@ -119,6 +119,275 @@ func main() {
 
 	r := gin.Default()
 
+	// ========== AUTH ENDPOINTS (Unprotected) ==========
+
+	// Auth status - tell if there's an admin user
+	r.GET("/api/auth/status", func(c *gin.Context) {
+		hasUser, err := db.HasAnyUser()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to check users"})
+			return
+		}
+		c.JSON(200, gin.H{"initialized": hasUser})
+	})
+
+	// Login endpoint
+	r.POST("/api/auth/login", func(c *gin.Context) {
+		var req struct {
+			Email    string `json:"email" binding:"required"`
+			Password string `json:"password" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Email and password are required"})
+			return
+		}
+
+		user, err := db.GetUserByEmail(req.Email)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Internal server error"})
+			return
+		}
+
+		if user == nil || !db.CheckPasswordHash(req.Password, user.PasswordHash) {
+			c.JSON(401, gin.H{"error": "Invalid email or password"})
+			return
+		}
+
+		token, err := auth.GenerateUserJWT(user.ID, user.Email, user.IsAdmin)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to generate session"})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"token": token,
+			"user": gin.H{
+				"id":        user.ID,
+				"email":     user.Email,
+				"firstName": user.FirstName,
+				"lastName":  user.LastName,
+				"isAdmin":   user.IsAdmin,
+			},
+		})
+	})
+
+	// Register endpoint (First User or Whitelisted)
+	r.POST("/api/auth/register", func(c *gin.Context) {
+		var req struct {
+			Email     string `json:"email" binding:"required"`
+			Password  string `json:"password" binding:"required"`
+			FirstName string `json:"firstName" binding:"required"`
+			LastName  string `json:"lastName" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Missing required fields"})
+			return
+		}
+
+		// Check if any users exist
+		hasUser, err := db.HasAnyUser()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Internal server error"})
+			return
+		}
+
+		isAdmin := false
+		if !hasUser {
+			// First user is Admin
+			isAdmin = true
+		} else {
+			// Not first user, check whitelist
+			whitelisted, err := db.IsEmailWhitelisted(req.Email)
+			if err != nil {
+				c.JSON(500, gin.H{"error": "Internal server error"})
+				return
+			}
+			if !whitelisted {
+				c.JSON(403, gin.H{"error": "This email is not whitelisted"})
+				return
+			}
+		}
+
+		// Create user
+		userID, err := db.CreateUser(req.Email, req.Password, req.FirstName, req.LastName, isAdmin)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to create user"})
+			return
+		}
+
+		token, _ := auth.GenerateUserJWT(userID, req.Email, isAdmin)
+		c.JSON(201, gin.H{
+			"token": token,
+			"user": gin.H{
+				"id":        userID,
+				"email":     req.Email,
+				"firstName": req.FirstName,
+				"lastName":  req.LastName,
+				"isAdmin":   isAdmin,
+			},
+		})
+	})
+
+	// Debug endpoint to reset admin (Only for dev/retry)
+	r.POST("/api/debug/reset-admin", func(c *gin.Context) {
+		_, err := db.DB.Exec("DELETE FROM users")
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to reset users"})
+			return
+		}
+		c.JSON(200, gin.H{"message": "All users deleted. You can now setup a new admin."})
+	})
+
+	// ========== PROTECTED ROUTES ==========
+	r.Static("/uploads", "./uploads")
+	r.Use(auth.AuthMiddleware())
+
+	// Profile endpoint
+	r.GET("/api/auth/me", func(c *gin.Context) {
+		email := c.MustGet("email").(string)
+		user, err := db.GetUserByEmail(email)
+		if err != nil || user == nil {
+			c.JSON(404, gin.H{"error": "User not found"})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"id":        user.ID,
+			"email":     user.Email,
+			"firstName": user.FirstName,
+			"lastName":  user.LastName,
+			"isAdmin":   user.IsAdmin,
+			"avatarUrl": user.AvatarURL,
+		})
+	})
+
+	// Update profile
+	r.PUT("/api/auth/profile", func(c *gin.Context) {
+		var req struct {
+			Email     string `json:"email" binding:"required"`
+			FirstName string `json:"firstName" binding:"required"`
+			LastName  string `json:"lastName" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Missing required fields"})
+			return
+		}
+
+		userID := c.MustGet("user_id").(int)
+		if err := db.UpdateUser(userID, req.Email, req.FirstName, req.LastName); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to update profile"})
+			return
+		}
+
+		c.JSON(200, gin.H{"message": "Profile updated successfully"})
+	})
+
+	// Change password
+	r.PUT("/api/auth/password", func(c *gin.Context) {
+		var req struct {
+			CurrentPassword string `json:"currentPassword" binding:"required"`
+			NewPassword     string `json:"newPassword" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Current and new passwords are required"})
+			return
+		}
+
+		email := c.MustGet("email").(string)
+		user, err := db.GetUserByEmail(email)
+		if err != nil || user == nil {
+			c.JSON(404, gin.H{"error": "User not found"})
+			return
+		}
+
+		if !db.CheckPasswordHash(req.CurrentPassword, user.PasswordHash) {
+			c.JSON(401, gin.H{"error": "Incorrect current password"})
+			return
+		}
+
+		if err := db.UpdateUserPassword(user.ID, req.NewPassword); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to update password"})
+			return
+		}
+
+		c.JSON(200, gin.H{"message": "Password updated successfully"})
+	})
+
+	// Upload avatar
+	r.POST("/api/auth/avatar", func(c *gin.Context) {
+		userID := c.MustGet("user_id").(int)
+		log.Printf("Received avatar upload request from user ID: %d\n", userID)
+
+		file, err := c.FormFile("avatar")
+		if err != nil {
+			log.Printf("Error getting form file: %v\n", err)
+			c.JSON(400, gin.H{"error": "No avatar file uploaded or invalid format"})
+			return
+		}
+
+		// Create uploads directory if it doesn't exist
+		uploadDir := "./uploads/avatars"
+		if err := os.MkdirAll(uploadDir, 0755); err != nil {
+			log.Printf("Error creating directory: %v\n", err)
+			c.JSON(500, gin.H{"error": "Failed to create upload directory"})
+			return
+		}
+
+		filename := fmt.Sprintf("%d_%d_%s", userID, time.Now().Unix(), file.Filename)
+		filepath := fmt.Sprintf("%s/%s", uploadDir, filename)
+		log.Printf("Saving avatar to: %s\n", filepath)
+
+		if err := c.SaveUploadedFile(file, filepath); err != nil {
+			log.Printf("Error saving file: %v\n", err)
+			c.JSON(500, gin.H{"error": "Failed to save avatar"})
+			return
+		}
+
+		avatarURL := fmt.Sprintf("/uploads/avatars/%s", filename)
+		if err := db.UpdateUserAvatar(userID, avatarURL); err != nil {
+			log.Printf("Error updating DB: %v\n", err)
+			c.JSON(500, gin.H{"error": "Failed to update user avatar"})
+			return
+		}
+
+		log.Printf("Avatar uploaded successfully: %s\n", avatarURL)
+		c.JSON(200, gin.H{"avatarUrl": avatarURL})
+	})
+
+	// Whitelist management (Admin only)
+	r.GET("/api/auth/whitelist", auth.AdminOnly(), func(c *gin.Context) {
+		emails, err := db.GetWhitelistedEmails()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to query whitelist"})
+			return
+		}
+		c.JSON(200, emails)
+	})
+
+	r.POST("/api/auth/whitelist", auth.AdminOnly(), func(c *gin.Context) {
+		var req struct {
+			Email string `json:"email" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Email is required"})
+			return
+		}
+		if err := db.AddEmailToWhitelist(req.Email); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to add email to whitelist"})
+			return
+		}
+		c.JSON(200, gin.H{"message": "Email added to whitelist"})
+	})
+
+	r.DELETE("/api/auth/whitelist/:email", auth.AdminOnly(), func(c *gin.Context) {
+		email := c.Param("email")
+		if err := db.RemoveEmailFromWhitelist(email); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to remove email from whitelist"})
+			return
+		}
+		c.JSON(200, gin.H{"message": "Email removed from whitelist"})
+	})
+
 	r.GET("/api/hello", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Baseful API is running"})
 	})
@@ -1405,8 +1674,21 @@ func main() {
 		limit := c.DefaultQuery("limit", "100")
 
 		// Get total count
+		filterCol := c.Query("filterCol")
+		filterOp := c.Query("filterOp")
+		filterVal := c.Query("filterVal")
+
+		whereClause := ""
+		if filterCol != "" && filterOp != "" && filterVal != "" {
+			if filterOp == "equals" {
+				whereClause = fmt.Sprintf("WHERE \"%s\"::text = '%s'", filterCol, filterVal)
+			} else if filterOp == "contains" {
+				whereClause = fmt.Sprintf("WHERE \"%s\"::text ILIKE '%%%s%%'", filterCol, filterVal)
+			}
+		}
+
 		countCmd := []string{"psql", "-U", "postgres", "-d", name, "-t", "-c",
-			fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", tableName)}
+			fmt.Sprintf("SELECT COUNT(*) FROM \"%s\" %s", tableName, whereClause)}
 		countExec, err := cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
 			Cmd:          countCmd,
 			AttachStdout: true,
@@ -1428,7 +1710,7 @@ func main() {
 
 		// Get table data with pagination
 		dataCmd := []string{"psql", "-U", "postgres", "-d", name, "-t", "-A", "-F", "|", "-c",
-			fmt.Sprintf("SELECT * FROM \"%s\" ORDER BY id LIMIT %s OFFSET %s", tableName, limit, offset)}
+			fmt.Sprintf("SELECT * FROM \"%s\" %s ORDER BY id LIMIT %s OFFSET %s", tableName, whereClause, limit, offset)}
 		dataExec, err := cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
 			Cmd:          dataCmd,
 			AttachStdout: true,

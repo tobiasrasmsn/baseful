@@ -18,6 +18,7 @@
     "clsx": "^2.1.1",
     "facehash": "^0.0.7",
     "lucide-react": "^0.563.0",
+    "motion": "^12.34.4",
     "prismjs": "^1.30.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.0",

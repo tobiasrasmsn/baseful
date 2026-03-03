@@ -12,6 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Facehash } from "facehash";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface Connection {
   pid: number;
@@ -45,6 +47,7 @@ const getSystemProcessDescription = (type: string) => {
 
 export default function DatabaseConnections() {
   const { id } = useParams<{ id: string }>();
+  const { token, logout } = useAuth();
   const [database, setDatabase] = useState<Database | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,18 +56,18 @@ export default function DatabaseConnections() {
 
   const fetchDatabase = useCallback(async () => {
     try {
-      const res = await fetch(`/api/databases/${id}`);
+      const res = await authFetch(`/api/databases/${id}`, token, {}, logout);
       if (!res.ok) throw new Error("Database not found");
       const data = await res.json();
       setDatabase(data);
     } catch (err: any) {
       setError(err.message);
     }
-  }, [id]);
+  }, [id, token, logout]);
 
   const fetchConnections = useCallback(async () => {
     try {
-      const res = await fetch(`/api/databases/${id}/connections`);
+      const res = await authFetch(`/api/databases/${id}/connections`, token, {}, logout);
       if (res.ok) {
         const data = await res.json();
         setConnections(data || []);
@@ -74,7 +77,7 @@ export default function DatabaseConnections() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, token, logout]);
 
   const terminateConnection = async (pid: number) => {
     if (
@@ -84,11 +87,13 @@ export default function DatabaseConnections() {
 
     setTerminatingPid(pid);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/databases/${id}/connections/${pid}/terminate`,
+        token,
         {
           method: "POST",
         },
+        logout
       );
       if (res.ok) {
         fetchConnections();
@@ -210,8 +215,8 @@ export default function DatabaseConnections() {
                         <td className="p-4">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${isSystem
-                                ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                                : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                              ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                              : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
                               }`}
                           >
                             {isSystem ? "System" : "Client"}
@@ -241,8 +246,8 @@ export default function DatabaseConnections() {
                         <td className="p-4">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${conn.state === "active"
-                                ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                                : "bg-neutral-500/10 text-neutral-400 border border-neutral-500/20"
+                              ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                              : "bg-neutral-500/10 text-neutral-400 border border-neutral-500/20"
                               }`}
                           >
                             {conn.state || (isSystem ? "background" : "idle")}

@@ -6,6 +6,8 @@ import {
   type ReactNode,
 } from "react";
 import { useParams } from "react-router-dom";
+import { useAuth } from "./AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface Project {
   id: number;
@@ -40,10 +42,18 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const { id: urlProjectId } = useParams<{ id: string }>();
+  const { token, logout } = useAuth();
 
   const fetchProjects = async () => {
+    if (!token) return;
     try {
-      const response = await fetch("/api/projects");
+      const response = await authFetch("/api/projects", token, {}, logout);
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+
       const data = await response.json();
       setProjects(data || []);
 
@@ -69,13 +79,13 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
     description: string,
   ): Promise<Project | null> => {
     try {
-      const response = await fetch("/api/projects", {
+      const response = await authFetch("/api/projects", token, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ name, description }),
-      });
+      }, logout);
 
       if (!response.ok) {
         const data = await response.json();
@@ -92,8 +102,10 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
   };
 
   useEffect(() => {
-    fetchProjects();
-  }, [urlProjectId]);
+    if (token) {
+      fetchProjects();
+    }
+  }, [urlProjectId, token]);
 
   return (
     <ProjectContext.Provider

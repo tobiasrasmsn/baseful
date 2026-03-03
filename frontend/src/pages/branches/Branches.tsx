@@ -18,6 +18,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Facehash } from "facehash";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface Branch {
   id: number;
@@ -32,6 +34,7 @@ interface Branch {
 
 export default function Branches() {
   const { id } = useParams<{ id: string }>();
+  const { token, logout } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -41,11 +44,11 @@ export default function Branches() {
   const [createLoading, setCreateLoading] = useState(false);
 
   const fetchBranches = async () => {
-    if (!id) return;
+    if (!id || !token) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/databases/${id}/branches`);
+      const res = await authFetch(`/api/databases/${id}/branches`, token, {}, logout);
       if (!res.ok) {
         throw new Error("Failed to fetch branches");
       }
@@ -76,11 +79,13 @@ export default function Branches() {
 
     setActionLoading(`${branchId}-${action}`);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/databases/${id}/branches/${branchId}/${action}`,
+        token,
         {
           method: "POST",
         },
+        logout
       );
       if (!res.ok) throw new Error(`Failed to ${action} branch`);
 
@@ -98,13 +103,13 @@ export default function Branches() {
 
     setCreateLoading(true);
     try {
-      const res = await fetch(`/api/databases/${id}/branches`, {
+      const res = await authFetch(`/api/databases/${id}/branches`, token, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ name: newBranchName }),
-      });
+      }, logout);
 
       if (!res.ok) {
         const data: { error?: string } = await res.json();

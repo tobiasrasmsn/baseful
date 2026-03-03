@@ -22,6 +22,8 @@ import { highlight, languages } from "prismjs";
 import "prismjs/components/prism-sql";
 import "prismjs/themes/prism-tomorrow.css";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface QueryResult {
   result: string;
@@ -38,6 +40,7 @@ interface QueryHistory {
 export default function SQLEditor() {
   const { id } = useParams<{ id: string }>();
   const { selectedDatabase } = useDatabase();
+  const { token, logout } = useAuth();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<QueryResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,11 +60,11 @@ export default function SQLEditor() {
     setResult(null);
 
     try {
-      const res = await fetch(`/api/databases/${id}/query`, {
+      const res = await authFetch(`/api/databases/${id}/query`, token, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
-      });
+      }, logout);
 
       const data = await res.json();
 

@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FolderPlusIcon } from "@phosphor-icons/react";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api";
 
 interface CreateProjectDialogProps {
   onProjectCreated: () => void;
@@ -22,6 +24,7 @@ export default function CreateProjectDialog({
   onProjectCreated,
   children,
 }: CreateProjectDialogProps) {
+  const { token, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -34,13 +37,13 @@ export default function CreateProjectDialog({
     setError(null);
 
     try {
-      const response = await fetch("/api/projects", {
+      const response = await authFetch("/api/projects", token, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ name, description }),
-      });
+      }, logout);
 
       if (!response.ok) {
         const data = await response.json();
