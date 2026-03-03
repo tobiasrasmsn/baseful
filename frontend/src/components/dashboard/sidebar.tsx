@@ -10,7 +10,6 @@ import {
   PlusIcon,
   TableIcon,
   TerminalIcon,
-  SpinnerIcon,
   LockIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
@@ -30,26 +29,6 @@ import { useProject } from "@/context/ProjectContext";
 import { DitherAvatar } from "../ui/hash-avatar";
 import { authFetch } from "@/lib/api";
 
-const AuroraOverlay = () => (
-  <div className="fixed inset-0 z-[9999] pointer-events-auto flex items-center justify-center overflow-hidden">
-    {/* Full screen backdrop */}
-    <div className="absolute inset-0 bg-background/60 backdrop-blur-md" />
-
-    {/* Content */}
-    <div className="relative z-10 flex flex-col items-center gap-6 text-center px-6">
-      <div className="space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight text-white">
-          System Update in Progress
-        </h2>
-        <p className="text-neutral-400 max-w-md mx-auto text-lg">
-          Installing the latest features and security patches. This will take a
-          moment.
-        </p>
-      </div>
-      <SpinnerIcon size={32} className="animate-spin" />
-    </div>
-  </div>
-);
 
 export default function Sidebar() {
   const { selectedDatabase, setSelectedDatabase, databases, refreshDatabases } =
@@ -59,9 +38,6 @@ export default function Sidebar() {
   const location = useLocation();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(
-    localStorage.getItem("baseful_is_updating") === "true",
-  );
   const [updateStatus, setUpdateStatus] = useState<{
     available: boolean;
     currentHash: string;
@@ -77,18 +53,6 @@ export default function Sidebar() {
         const res = await authFetch("/api/system/update-status", token, {}, logout);
         if (!res.ok) throw new Error("Status failed");
         const data = await res.json();
-
-        // If we just finished an update (detected by localStorage),
-        // force available to false until a new check happens
-        if (
-          localStorage.getItem("baseful_is_updating") === "true" &&
-          !data.updatingStatus
-        ) {
-          data.available = false;
-          localStorage.removeItem("baseful_is_updating");
-          setIsUpdating(false);
-        }
-
         setUpdateStatus(data);
       } catch (e) {
         console.error("Failed to check for updates");
@@ -98,49 +62,8 @@ export default function Sidebar() {
     checkUpdates();
     const interval = setInterval(checkUpdates, 10 * 60 * 1000);
 
-    // If we are currently updating, poll much faster
-    let pollInterval: any;
-    if (updateStatus?.updatingStatus || isUpdating) {
-      pollInterval = setInterval(async () => {
-        if (!token) return;
-        try {
-          const res = await authFetch("/api/system/update-status", token, {}, logout);
-          if (!res.ok) throw new Error("Status failed");
-          const data = await res.json();
-
-          // If the hash changed, the update finished and system restarted!
-          if (
-            data.currentHash !== updateStatus?.currentHash &&
-            updateStatus?.currentHash
-          ) {
-            setIsUpdating(false);
-            localStorage.removeItem("baseful_is_updating");
-            // Force available to false in local state to hide banner immediately
-            setUpdateStatus({ ...data, available: false });
-            setTimeout(() => window.location.reload(), 500);
-            return;
-          }
-
-          setUpdateStatus(data);
-          if (data.updatingStatus) {
-            setIsUpdating(true);
-            localStorage.setItem("baseful_is_updating", "true");
-          } else {
-            setIsUpdating(false);
-            localStorage.removeItem("baseful_is_updating");
-          }
-        } catch (e) {
-          // If fetch fails, the system might be restarting
-          console.log("System unreachable, likely restarting...");
-        }
-      }, 2000);
-    }
-
-    return () => {
-      clearInterval(interval);
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [updateStatus?.updatingStatus, isUpdating, updateStatus?.currentHash, token]);
+    return () => clearInterval(interval);
+  }, [token]);
 
   useEffect(() => {
     const pathParts = location.pathname.split("/");
@@ -193,15 +116,12 @@ export default function Sidebar() {
     )
       return;
 
-    setIsUpdating(true);
-    localStorage.setItem("baseful_is_updating", "true");
     try {
       const res = await authFetch("/api/system/update", token, { method: "POST" }, logout);
       if (!res.ok) throw new Error("Update failed");
       // No alert needed, the UI will show the updating state
     } catch (e) {
       alert("Failed to start update. Check backend logs.");
-      setIsUpdating(false);
     }
   };
 
@@ -209,7 +129,6 @@ export default function Sidebar() {
 
   return (
     <div className="w-72 p-2 flex flex-col h-full">
-      {(isUpdating || updateStatus?.updatingStatus) && <AuroraOverlay />}
       <div className="mb-6 flex flex-row items-center justify-between">
         {/* Combined Project/Database Selector */}
         <Popover open={selectorOpen} onOpenChange={setSelectorOpen}>
@@ -631,10 +550,9 @@ export default function Sidebar() {
             </p>
             <button
               onClick={handleUpdate}
-              disabled={isUpdating}
-              className="w-full h-8 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all rounded-md text-xs font-medium text-white shadow-lg active:scale-95"
+              className="w-full h-8 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 transition-all rounded-md text-xs font-medium text-white shadow-lg active:scale-95"
             >
-              {isUpdating ? "Updating..." : "Update Now"}
+              Update Now
             </button>
           </div>
         )}

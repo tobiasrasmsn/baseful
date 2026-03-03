@@ -1,6 +1,7 @@
 package system
 
 import (
+	"baseful/db"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -24,7 +25,21 @@ var (
 
 func InitUpdateChecker() {
 	// Initial check
-	go CheckForUpdates()
+	go func() {
+		CheckForUpdates()
+		// After initial check, see if we just finished an update
+		statusMutex.RLock()
+		currentHash := currentStatus.CurrentHash
+		statusMutex.RUnlock()
+
+		isUpdating, _ := db.GetSetting("system_is_updating")
+		targetHash, _ := db.GetSetting("system_update_target_hash")
+
+		if isUpdating == "true" && currentHash == targetHash && targetHash != "" {
+			fmt.Println("System updated successfully, clearing update flag.")
+			db.UpdateSetting("system_is_updating", "false")
+		}
+	}()
 
 	// Periodic check every 30 minutes
 	ticker := time.NewTicker(30 * time.Minute)
@@ -86,13 +101,25 @@ func CheckForUpdates() {
 func GetUpdateStatus() UpdateStatus {
 	statusMutex.RLock()
 	defer statusMutex.RUnlock()
-	return currentStatus
+
+	status := currentStatus
+	isUpdating, _ := db.GetSetting("system_is_updating")
+	if isUpdating == "true" {
+		status.UpdatingStatus = true
+	}
+
+	return status
 }
 
 func RunUpdate() error {
 	statusMutex.Lock()
 	currentStatus.UpdatingStatus = true
+	remoteHash := currentStatus.RemoteHash
 	statusMutex.Unlock()
+
+	// Persist state for cross-device and restart monitoring
+	db.UpdateSetting("system_is_updating", "true")
+	db.UpdateSetting("system_update_target_hash", remoteHash)
 
 	// 0. Ensure git safe directory
 	exec.Command("git", "config", "--global", "--add", "safe.directory", "/repo").Run()

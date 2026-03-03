@@ -19,6 +19,7 @@ import Profile from "./pages/Profile";
 import AuthLayout from "./components/auth/AuthLayout";
 import Sidebar from "./components/dashboard/sidebar";
 import MobileDock from "./components/dashboard/MobileDock";
+import UpdateOverlay from "./components/dashboard/UpdateOverlay";
 import { ThemeProvider } from "./components/theme-provider";
 import { DatabaseProvider } from "./context/DatabaseContext";
 import { ProjectProvider } from "./context/ProjectContext";
@@ -44,6 +45,7 @@ function App() {
                   path="/*"
                   element={
                     <AuthGuard>
+                      <UpdateOverlay />
                       <div className="bg-background h-dvh w-full flex flex-row">
                         {/* Desktop Sidebar - hidden on mobile */}
                         <div className="hidden md:block">
