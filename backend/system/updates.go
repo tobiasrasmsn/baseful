@@ -161,8 +161,8 @@ func RunUpdate() error {
 		time.Sleep(2 * time.Second)
 		fmt.Println("Executing docker compose up -d --build...")
 
-		// Use --build directly in up to consolidate steps
-		args := []string{"-f", "/repo/docker-compose.yml", "up", "-d", "--build", "--remove-orphans"}
+		// Use -p baseful to ensure we target the correct project regardless of directory name
+		args := []string{"-p", "baseful", "-f", "/repo/docker-compose.yml", "up", "-d", "--build", "--remove-orphans"}
 
 		upCmd := exec.Command("docker", append([]string{"compose"}, args...)...)
 		if out, err := upCmd.CombinedOutput(); err != nil {

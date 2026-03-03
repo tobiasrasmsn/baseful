@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: baseful
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backend-data:/app/data
