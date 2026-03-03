@@ -238,8 +238,24 @@ func main() {
 		c.JSON(200, gin.H{"message": "All users deleted. You can now setup a new admin."})
 	})
 
-	// ========== PROTECTED ROUTES ==========
+	// ========== STATIC ASSETS & PUBLIC ROUTES ==========
 	r.Static("/uploads", "./uploads")
+
+	// Serve static files from frontend/dist if it exists
+	// This will serve the built Vite app in a production container
+	if _, err := os.Stat("./frontend/dist"); err == nil {
+		r.StaticFS("/assets", http.Dir("./frontend/dist/assets"))
+		r.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
+		r.StaticFile("/vite.svg", "./frontend/dist/vite.svg")
+
+		// Catch-all route for SPA: serve index.html for any other route
+		r.NoRoute(func(c *gin.Context) {
+			if !strings.HasPrefix(c.Request.URL.Path, "/api") && !strings.HasPrefix(c.Request.URL.Path, "/uploads") {
+				c.File("./frontend/dist/index.html")
+			}
+		})
+	}
+
 	r.Use(auth.AuthMiddleware())
 
 	// Profile endpoint
@@ -2549,21 +2565,6 @@ func main() {
 			"message": "Proxy is running in-memory and cannot be restarted. Restart the main application instead.",
 		})
 	})
-
-	// Serve static files from frontend/dist if it exists
-	// This will serve the built Vite app in a production container
-	if _, err := os.Stat("./frontend/dist"); err == nil {
-		r.StaticFS("/assets", http.Dir("./frontend/dist/assets"))
-		r.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
-		r.StaticFile("/vite.svg", "./frontend/dist/vite.svg")
-
-		// Catch-all route for SPA: serve index.html for any other route
-		r.NoRoute(func(c *gin.Context) {
-			if !strings.HasPrefix(c.Request.URL.Path, "/api") && !strings.HasPrefix(c.Request.URL.Path, "/uploads") {
-				c.File("./frontend/dist/index.html")
-			}
-		})
-	}
 
 	port := os.Getenv("PORT")
 	if port == "" {

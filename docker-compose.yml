@@ -16,9 +16,9 @@ services:
       - .env
     ports:
       - "3002:3002"
+      - "80:80"
+      - "443:443"
       - "6432:6432"
-      # - "80:80"   # Uncomment these if you want to use a domain with SSL
-      # - "443:443" # and port 80 is not used by another app
     networks:
       - baseful-network
     restart: unless-stopped
