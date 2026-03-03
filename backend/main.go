@@ -247,7 +247,6 @@ func main() {
 		r.StaticFS("/assets", http.Dir("./frontend/dist/assets"))
 		r.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
 		r.StaticFile("/vite.svg", "./frontend/dist/vite.svg")
-		r.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
 
 		// Catch-all route for SPA: serve index.html for any other route
 		r.NoRoute(func(c *gin.Context) {
