@@ -52,8 +52,8 @@ function App() {
                           <Sidebar />
                         </div>
 
-                        <main className="p-2 bg-background flex h-full flex-1 min-w-0 pb-2">
-                          <div className="bg-card/75 overflow-y-auto overflow-x-hidden border border-border rounded-md h-full w-full">
+                        <main className="p-0 md:p-2 bg-background flex h-full flex-1 min-w-0 pb-2">
+                          <div className="bg-card/75 overflow-y-auto overflow-x-hidden md:border border-border md:rounded-md h-full w-full">
                             <Routes>
                               <Route path="/" element={<Home />} />
                               <Route path="/about" element={<About />} />

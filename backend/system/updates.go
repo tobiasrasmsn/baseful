@@ -24,10 +24,14 @@ var (
 )
 
 func InitUpdateChecker() {
+	// Ensure safe directory for git commands
+	exec.Command("git", "config", "--global", "--add", "safe.directory", "/repo").Run()
+
 	// Initial check
 	go func() {
 		CheckForUpdates()
 		// After initial check, see if we just finished an update
+		time.Sleep(2 * time.Second) // Give it a moment to stabilize
 		statusMutex.RLock()
 		currentHash := currentStatus.CurrentHash
 		statusMutex.RUnlock()
@@ -35,9 +39,18 @@ func InitUpdateChecker() {
 		isUpdating, _ := db.GetSetting("system_is_updating")
 		targetHash, _ := db.GetSetting("system_update_target_hash")
 
-		if isUpdating == "true" && currentHash == targetHash && targetHash != "" {
-			fmt.Println("System updated successfully, clearing update flag.")
-			db.UpdateSetting("system_is_updating", "false")
+		if isUpdating == "true" {
+			if currentHash == targetHash && targetHash != "" {
+				fmt.Println("System updated successfully, clearing update flag.")
+				db.UpdateSetting("system_is_updating", "false")
+			} else {
+				// If we started up and the flag is set, but hashes don't match,
+				// it likely failed or was a manual restart.
+				// We'll clear it after a longer timeout if it's still stuck,
+				// but for now let's be more lenient.
+				fmt.Printf("System started with update flag but hash mismatch (Current: %s, Target: %s). Clearing flag to prevent stuck UI.\n", currentHash, targetHash)
+				db.UpdateSetting("system_is_updating", "false")
+			}
 		}
 	}()
 
@@ -61,6 +74,9 @@ func CheckForUpdates() {
 		currentStatus.LastChecked = time.Now()
 		statusMutex.Unlock()
 	}()
+
+	// Ensure git safe directory
+	exec.Command("git", "config", "--global", "--add", "safe.directory", "/repo").Run()
 
 	// 1. Git fetch
 	fetchCmd := exec.Command("git", "-C", "/repo", "fetch", "origin", "main")
