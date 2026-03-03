@@ -14,6 +14,7 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   Globe,
+  CaretUpIcon,
 } from "@phosphor-icons/react";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useDatabase } from "@/context/DatabaseContext";
@@ -287,11 +288,15 @@ export default function MobileDock() {
                       {getSelectorDisplayText()}
                     </span>
                   </div>
-                  <CaretDownIcon
+                  {selectorOpen ? <CaretDownIcon
                     weight="bold"
                     size={12}
                     className="text-neutral-400 flex-shrink-0"
-                  />
+                  /> : <CaretUpIcon
+                    weight="bold"
+                    size={12}
+                    className="text-neutral-400 flex-shrink-0"
+                  />}
                 </div>
               </PopoverTrigger>
               <PopoverContent className="w-72 max-h-80 overflow-y-auto p-2 pb-0 pt-4 ml-2">
@@ -307,7 +312,7 @@ export default function MobileDock() {
                           {dbs.length > 0 && (
                             <>
                               <div className="flex flex-row items-center">
-                                <p className="text-xs text-neutral-400 px-2 font-normal">
+                                <p className="text-xs mb-1 text-neutral-400 px-2 font-normal">
                                   {getProjectName(
                                     parseInt(projectId) || undefined,
                                   )}
