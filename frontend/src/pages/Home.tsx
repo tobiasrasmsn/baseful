@@ -1,11 +1,11 @@
 import { useAuth } from "@/context/AuthContext";
 import { useDatabase } from "@/context/DatabaseContext";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { PlusIcon, ArrowRightIcon, DatabaseIcon, HardDriveIcon, ActivityIcon } from "@phosphor-icons/react";
+import { PlusIcon, DatabaseIcon } from "@phosphor-icons/react";
 import CreateDatabaseDialog from "@/components/database/CreateDatabaseDialog";
 
 export default function Home() {

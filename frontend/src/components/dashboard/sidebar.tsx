@@ -6,13 +6,11 @@ import {
   Globe,
   GraphIcon,
   HouseIcon,
-  MagnifyingGlassIcon,
   PlusIcon,
   TableIcon,
   TerminalIcon,
   LockIcon,
   UsersIcon,
-  DatabaseIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
