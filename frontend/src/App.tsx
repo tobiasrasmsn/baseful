@@ -11,6 +11,7 @@ import Monitoring from "./pages/Monitoring";
 import WebServer from "./pages/WebServer";
 import Branches from "./pages/branches/Branches";
 import Backup from "./pages/Backup";
+import Security from "./pages/Security";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -98,6 +99,10 @@ function App() {
                               <Route
                                 path="/db/:id/backup"
                                 element={<Backup />}
+                              />
+                              <Route
+                                path="/db/:id/security"
+                                element={<Security />}
                               />
                               <Route path="/users" element={<Users />} />
                               <Route path="/settings/profile" element={<Profile />} />
