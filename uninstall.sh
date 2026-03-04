@@ -37,7 +37,7 @@ printf "   - Unattended upgrades\n"
 printf "   - Proxy log directory (/var/log/proxy)\n"
 echo ""
 printf "Are you sure? Type 'yes' to continue: "
-read -r CONFIRM
+read -r CONFIRM < /dev/tty
 
 if [ "$CONFIRM" != "yes" ]; then
     info "Aborted."
