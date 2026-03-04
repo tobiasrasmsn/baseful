@@ -133,7 +133,7 @@ func RunUpdate() error {
 	remoteHash := currentStatus.RemoteHash
 	statusMutex.Unlock()
 
-	// Persist state for cross-device and restart monitoring
+	// Persist state so InitUpdateChecker on the new container can verify success.
 	db.UpdateSetting("system_is_updating", "true")
 	db.UpdateSetting("system_update_target_hash", remoteHash)
 
@@ -142,7 +142,7 @@ func RunUpdate() error {
 	// 0. Ensure git safe directory
 	exec.Command("git", "config", "--global", "--add", "safe.directory", "/repo").Run()
 
-	// 1. Pull latest code
+	// 1. Pull latest code inside the container (source is mounted at /repo).
 	fmt.Println("Pulling latest code...")
 	pullCmd := exec.Command("git", "-C", "/repo", "pull", "origin", "main")
 	if out, err := pullCmd.CombinedOutput(); err != nil {
@@ -153,30 +153,44 @@ func RunUpdate() error {
 		db.UpdateSetting("system_is_updating", "false")
 		return fmt.Errorf("git pull failed: %v", err)
 	}
+	fmt.Println("Git pull succeeded.")
 
-	// 2. Schedule restart (up --build)
-	// We do this in a goroutine because it will eventually kill this process
+	// 2. Trigger the rebuild via a short-lived sidecar container that uses the
+	//    host Docker socket.  This means the rebuild runs OUTSIDE this container
+	//    so it survives our own process being killed by Docker.
+	//    The sidecar:
+	//      - has a short delay so this HTTP response reaches the browser first
+	//      - runs "docker compose up -d --build --remove-orphans" on the host
+	//      - then removes itself (--rm)
+	//    On the next boot, InitUpdateChecker clears the system_is_updating flag.
 	go func() {
-		// Wait a second for the response to reach the frontend
+		// Give the HTTP response time to reach the frontend before we disappear.
 		time.Sleep(2 * time.Second)
-		fmt.Println("Executing docker compose up -d --build...")
+		fmt.Println("Launching updater sidecar container...")
 
-		// Use -p baseful to ensure we target the correct project regardless of directory name
-		args := []string{"-p", "baseful", "-f", "/repo/docker-compose.yml", "up", "-d", "--build", "--remove-orphans"}
+		// The shell command the sidecar runs on the host Docker daemon.
+		shellCmd := `sleep 1 && docker compose -p baseful -f /repo/docker-compose.yml up -d --build --remove-orphans`
 
-		upCmd := exec.Command("docker", append([]string{"compose"}, args...)...)
-		if out, err := upCmd.CombinedOutput(); err != nil {
-			fmt.Printf("Docker compose up failed (trying docker-compose): %v, output: %s\n", err, string(out))
-			up2 := exec.Command("docker-compose", args...)
-			if out2, err2 := up2.CombinedOutput(); err2 != nil {
-				fmt.Printf("Docker-compose up failed: %v, output: %s\n", err2, string(out2))
-				// If it fails, we should clear the flag so the UI isn't stuck
-				db.UpdateSetting("system_is_updating", "false")
-			} else {
-				fmt.Println("System update triggered successfully (docker-compose).")
-			}
+		sidecarArgs := []string{
+			"run", "--rm",
+			"--name", "baseful-updater",
+			// Mount the host Docker socket so we can drive Docker from inside.
+			"-v", "/var/run/docker.sock:/var/run/docker.sock",
+			// Mount the repo so the compose file is reachable at /repo.
+			"-v", "/opt/baseful:/repo",
+			// Use the official Docker CLI image — tiny, already available if
+			// the host has pulled it; otherwise Docker will pull it automatically.
+			"docker:cli",
+			"sh", "-c", shellCmd,
+		}
+
+		cmd := exec.Command("docker", sidecarArgs...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			fmt.Printf("Updater sidecar failed: %v\nOutput: %s\n", err, string(out))
+			// Sidecar failed — clear the flag so the UI doesn't stay stuck.
+			db.UpdateSetting("system_is_updating", "false")
 		} else {
-			fmt.Println("System update triggered successfully (docker).")
+			fmt.Println("Updater sidecar launched successfully.")
 		}
 	}()
 
