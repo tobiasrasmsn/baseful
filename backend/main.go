@@ -246,6 +246,7 @@ func main() {
 	if _, err := os.Stat("./frontend/dist"); err == nil {
 		r.StaticFS("/assets", http.Dir("./frontend/dist/assets"))
 		r.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
+		r.StaticFile("/logo.png", "./frontend/dist/logo.png")
 		r.StaticFile("/vite.svg", "./frontend/dist/vite.svg")
 
 		// Catch-all route for SPA: serve index.html for any other route
