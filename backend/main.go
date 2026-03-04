@@ -824,7 +824,7 @@ func main() {
 		c.JSON(http.StatusOK, databases)
 	})
 
-	// Create database
+	// Create database (Streaming for progress)
 	r.POST("/api/databases", func(c *gin.Context) {
 		var req struct {
 			Name         string  `json:"name"`
@@ -866,144 +866,174 @@ func main() {
 			}
 		}
 
-		ctx := context.Background()
-		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to connect to Docker: " + err.Error()})
-			return
-		}
-		defer cli.Close()
+		c.Header("Content-Type", "application/x-ndjson")
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Connection", "keep-alive")
 
-		imageName := fmt.Sprintf("postgres:%s", req.Version)
-		if req.Version == "" {
-			imageName = "postgres:latest"
-		}
+		c.Stream(func(w io.Writer) bool {
+			sendUpdate := func(status, message string, progress float64, data any) {
+				update := gin.H{
+					"status":   status,
+					"message":  message,
+					"progress": progress,
+				}
+				if data != nil {
+					update["data"] = data
+				}
+				json.NewEncoder(w).Encode(update)
+				w.(http.Flusher).Flush()
+			}
 
-		// Pull image
-		pullResp, err := cli.ImagePull(ctx, imageName, image.PullOptions{})
-		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to pull image: " + err.Error()})
-			return
-		}
-		defer pullResp.Close()
-		io.Copy(os.Stdout, pullResp)
+			ctx := context.Background()
+			cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+			if err != nil {
+				sendUpdate("error", "Failed to connect to Docker: "+err.Error(), 0, nil)
+				return false
+			}
+			defer cli.Close()
 
-		// Get a free port for the database (for local access via proxy on host)
-		freePort, err := getFreePort()
-		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to get free port: " + err.Error()})
-			return
-		}
+			imageName := fmt.Sprintf("postgres:%s", req.Version)
+			if req.Version == "" {
+				imageName = "postgres:latest"
+			}
 
-		password, err := generatePassword(16)
-		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to generate password"})
-			return
-		}
+			// Pull image with progress tracking
+			sendUpdate("pulling", "Pulling Docker image...", 0, nil)
+			pullResp, err := cli.ImagePull(ctx, imageName, image.PullOptions{})
+			if err != nil {
+				sendUpdate("error", "Failed to pull image: "+err.Error(), 0, nil)
+				return false
+			}
+			defer pullResp.Close()
 
-		// Generate unique container name
-		randBytes := make([]byte, 8)
-		rand.Read(randBytes)
-		containerName := fmt.Sprintf("baseful-%s-%s", req.Name, hex.EncodeToString(randBytes))
+			// Parse Docker pull progress
+			decoder := json.NewDecoder(pullResp)
+			for {
+				var pullUpdate struct {
+					Status         string `json:"status"`
+					ProgressDetail struct {
+						Current int64 `json:"current"`
+						Total   int64 `json:"total"`
+					} `json:"progressDetail"`
+				}
+				if err := decoder.Decode(&pullUpdate); err != nil {
+					if err == io.EOF {
+						break
+					}
+					break
+				}
 
-		// Create container WITH port bindings for local access
-		resp, err := cli.ContainerCreate(ctx, &container.Config{
-			Image:    imageName,
-			Hostname: req.Name,
-			Env: []string{
-				"POSTGRES_PASSWORD=" + password,
-				"POSTGRES_DB=" + req.Name,
-			},
-			ExposedPorts: nat.PortSet{
-				"5432/tcp": struct{}{},
-			},
-			Labels: map[string]string{
-				"managed-by":         "baseful",
-				"baseful.database":   req.Name,
-				"baseful.project_id": fmt.Sprintf("%d", req.ProjectID),
-			},
-		}, &container.HostConfig{
-			NetworkMode: docker.NetworkName,
-			PortBindings: nat.PortMap{
-				"5432/tcp": []nat.PortBinding{
-					{HostIP: "0.0.0.0", HostPort: strconv.Itoa(freePort)},
+				if pullUpdate.ProgressDetail.Total > 0 {
+					percent := float64(pullUpdate.ProgressDetail.Current) / float64(pullUpdate.ProgressDetail.Total) * 100
+					sendUpdate("pulling", "Pulling "+imageName+"...", percent, nil)
+				}
+			}
+
+			// Get a free port
+			sendUpdate("creating", "Generating configuration...", 100, nil)
+			freePort, err := getFreePort()
+			if err != nil {
+				sendUpdate("error", "Failed to get free port: "+err.Error(), 0, nil)
+				return false
+			}
+
+			password, err := generatePassword(16)
+			if err != nil {
+				sendUpdate("error", "Failed to generate password", 0, nil)
+				return false
+			}
+
+			randBytes := make([]byte, 8)
+			rand.Read(randBytes)
+			containerName := fmt.Sprintf("baseful-%s-%s", req.Name, hex.EncodeToString(randBytes))
+
+			// Create container
+			sendUpdate("creating", "Creating container...", 100, nil)
+			resp, err := cli.ContainerCreate(ctx, &container.Config{
+				Image:    imageName,
+				Hostname: req.Name,
+				Env: []string{
+					"POSTGRES_PASSWORD=" + password,
+					"POSTGRES_DB=" + req.Name,
 				},
-			},
-			Resources: container.Resources{
-				Memory:   int64(req.MaxRAMMB) * 1024 * 1024,
-				NanoCPUs: int64(req.MaxCPU * 1000000000),
-			},
-			SecurityOpt: []string{
-				"no-new-privileges:true",
-			},
-			CapDrop: []string{"ALL"},
-			CapAdd:  []string{"CHOWN", "SETGID", "SETUID", "DAC_OVERRIDE"},
-			RestartPolicy: container.RestartPolicy{
-				Name: "unless-stopped",
-			},
-		}, nil, nil, containerName)
+				ExposedPorts: nat.PortSet{
+					"5432/tcp": struct{}{},
+				},
+				Labels: map[string]string{
+					"managed-by":         "baseful",
+					"baseful.database":   req.Name,
+					"baseful.project_id": fmt.Sprintf("%d", req.ProjectID),
+				},
+			}, &container.HostConfig{
+				NetworkMode: docker.NetworkName,
+				PortBindings: nat.PortMap{
+					"5432/tcp": []nat.PortBinding{
+						{HostIP: "0.0.0.0", HostPort: strconv.Itoa(freePort)},
+					},
+				},
+				Resources: container.Resources{
+					Memory:   int64(req.MaxRAMMB) * 1024 * 1024,
+					NanoCPUs: int64(req.MaxCPU * 1000000000),
+				},
+				SecurityOpt: []string{
+					"no-new-privileges:true",
+				},
+				CapDrop: []string{"ALL"},
+				CapAdd:  []string{"CHOWN", "SETGID", "SETUID", "DAC_OVERRIDE"},
+				RestartPolicy: container.RestartPolicy{
+					Name: "unless-stopped",
+				},
+			}, nil, nil, containerName)
 
-		if err != nil {
-			fmt.Printf("Error creating container: %v\n", err)
-			c.JSON(500, gin.H{"error": "Failed to create container: " + err.Error()})
-			return
-		}
+			if err != nil {
+				sendUpdate("error", "Failed to create container: "+err.Error(), 0, nil)
+				return false
+			}
 
-		if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-			fmt.Printf("Error starting container: %v\n", err)
-			_ = cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
-			c.JSON(500, gin.H{"error": "Failed to start container: " + err.Error()})
-			return
-		}
+			// Start container
+			sendUpdate("starting", "Starting database engine...", 100, nil)
+			if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+				_ = cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+				sendUpdate("error", "Failed to start container: "+err.Error(), 0, nil)
+				return false
+			}
 
-		// Store in DB (host is container name for internal Docker network access, mapped_port for host access)
-		result, err := db.DB.Exec(
-			"INSERT INTO databases (name, type, host, port, mapped_port, container_id, version, password, status, project_id, max_cpu, max_ram_mb, max_storage_mb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			req.Name, req.Type, containerName, 5432, freePort, resp.ID, req.Version, password, "active", req.ProjectID, req.MaxCPU, req.MaxRAMMB, req.MaxStorageMB,
-		)
+			// Store in DB
+			sendUpdate("finalizing", "Finalizing database setup...", 100, nil)
+			result, err := db.DB.Exec(
+				"INSERT INTO databases (name, type, host, port, mapped_port, container_id, version, password, status, project_id, max_cpu, max_ram_mb, max_storage_mb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				req.Name, req.Type, containerName, 5432, freePort, resp.ID, req.Version, password, "active", req.ProjectID, req.MaxCPU, req.MaxRAMMB, req.MaxStorageMB,
+			)
 
-		if err != nil {
-			fmt.Printf("Error saving to DB: %v\n", err)
-			c.JSON(500, gin.H{"error": "Failed to save to database: " + err.Error()})
-			return
-		}
+			if err != nil {
+				sendUpdate("error", "Failed to save to database: "+err.Error(), 0, nil)
+				return false
+			}
 
-		databaseID, _ := result.LastInsertId()
+			databaseID, _ := result.LastInsertId()
 
-		// Generate JWT token for this database
-		tokenID, err := auth.GenerateTokenID()
-		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to generate token ID"})
-			return
-		}
+			// Tokens and connection strings
+			tokenID, _ := auth.GenerateTokenID()
+			jwtToken, _ := auth.GenerateJWT(int(databaseID), 0, tokenID)
+			tokenHash := db.HashToken(jwtToken)
+			expiresAt := time.Now().AddDate(2, 0, 0)
+			db.CreateToken(int(databaseID), tokenID, tokenHash, expiresAt)
 
-		jwtToken, err := auth.GenerateJWT(int(databaseID), 0, tokenID)
-		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to generate JWT token"})
-			return
-		}
+			proxyHost := auth.GetProxyHost()
+			proxyPort := auth.GetProxyPort()
+			portInt, _ := strconv.Atoi(proxyPort)
+			connectionString := auth.GenerateConnectionString(jwtToken, int(databaseID), proxyHost, portInt, "disable")
 
-		// Store token in database
-		tokenHash := db.HashToken(jwtToken)
-		expiresAt := time.Now().AddDate(2, 0, 0)
-		if _, err := db.CreateToken(int(databaseID), tokenID, tokenHash, expiresAt); err != nil {
-			c.JSON(500, gin.H{"error": "Failed to store token"})
-			return
-		}
+			// Final success message with data
+			sendUpdate("success", "Database created successfully!", 100, gin.H{
+				"id":                databaseID,
+				"container_id":      resp.ID,
+				"connection_string": connectionString,
+				"internal_host":     containerName,
+				"internal_port":     5432,
+			})
 
-		// Generate proxy connection string
-		proxyHost := auth.GetProxyHost()
-		proxyPort := auth.GetProxyPort()
-		portInt, _ := strconv.Atoi(proxyPort)
-		connectionString := auth.GenerateConnectionString(jwtToken, int(databaseID), proxyHost, portInt, "disable")
-
-		c.JSON(200, gin.H{
-			"message":           "Database created and started",
-			"id":                databaseID,
-			"container_id":      resp.ID,
-			"connection_string": connectionString,
-			"internal_host":     containerName,
-			"internal_port":     5432,
+			return false
 		})
 	})
 

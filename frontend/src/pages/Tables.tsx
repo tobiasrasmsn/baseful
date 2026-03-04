@@ -274,8 +274,12 @@ export default function Tables() {
           {/* Tables sidebar */}
           <div className="w-64 shrink-0 p-4 overflow-hidden flex flex-col">
             <div className="overflow-y-auto flex-1 flex flex-col gap-1">
-              {loading ? (
-                <SidebarSkeleton />
+              {tables.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-neutral-400">
+                    No tables found
+                  </p>
+                </div>
               ) : (
                 tables?.map((table, i) => (
                   <button

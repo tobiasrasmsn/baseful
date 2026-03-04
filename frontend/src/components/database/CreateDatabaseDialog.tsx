@@ -18,11 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusIcon } from "@phosphor-icons/react";
+import { CpuIcon, HardDriveIcon, MemoryIcon, PlusIcon } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api";
+
+import { Progress } from "@/components/ui/progress";
 
 interface Project {
   id: number;
@@ -44,7 +46,7 @@ export default function CreateDatabaseDialog({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState("postgresql");
-  const [version, setVersion] = useState("15");
+  const [version, setVersion] = useState("17");
   const [projectId, setProjectId] = useState<string>("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [maxCpu, setMaxCpu] = useState<number>(1);
@@ -52,6 +54,8 @@ export default function CreateDatabaseDialog({
   const [maxStorageMb, setMaxStorageMb] = useState<number>(1024);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState("");
 
   const { token, logout } = useAuth();
 
@@ -90,6 +94,8 @@ export default function CreateDatabaseDialog({
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setProgress(0);
+    setStatusMessage("Initializing...");
 
     if (!projectId) {
       setError("Please select a project");
@@ -98,10 +104,11 @@ export default function CreateDatabaseDialog({
     }
 
     try {
-      const response = await authFetch("/api/databases", token, {
+      const response = await fetch("/api/databases", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           name,
@@ -112,7 +119,7 @@ export default function CreateDatabaseDialog({
           maxRamMb,
           maxStorageMb,
         }),
-      }, logout);
+      });
 
       if (response.status === 401) {
         logout();
@@ -124,32 +131,66 @@ export default function CreateDatabaseDialog({
         throw new Error(data.error || "Failed to create database");
       }
 
-      const data = await response.json();
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Failed to read server response");
 
-      // Auto-select the new database and navigate to it
-      if (data.id) {
-        const newDatabase = {
-          id: data.id,
-          name: name,
-          type: type,
-          host: data.internal_host || "",
-          port: 5432,
-          status: "active",
-          projectId: parseInt(projectId),
-        };
-        setSelectedDatabase(newDatabase);
-        navigate(`/db/${data.id}/dashboard`);
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const update = JSON.parse(line);
+
+            if (update.status === "error") {
+              throw new Error(update.message);
+            }
+
+            setStatusMessage(update.message);
+            if (update.progress !== undefined) {
+              setProgress(update.progress);
+            }
+
+            if (update.status === "success") {
+              const data = update.data;
+              // Auto-select the new database and navigate to it
+              if (data.id) {
+                const newDatabase = {
+                  id: data.id,
+                  name: name,
+                  type: type,
+                  host: data.internal_host || "",
+                  port: 5432,
+                  status: "active",
+                  projectId: parseInt(projectId),
+                };
+                setSelectedDatabase(newDatabase);
+                navigate(`/db/${data.id}/dashboard`);
+              }
+
+              setName("");
+              setType("postgresql");
+              setVersion("17");
+              setProjectId("");
+              setMaxCpu(1);
+              setMaxRamMb(512);
+              setMaxStorageMb(1024);
+              setOpen(false);
+              onDatabaseCreated();
+            }
+          } catch (e) {
+            console.error("Error parsing stream line:", e);
+          }
+        }
       }
-
-      setName("");
-      setType("postgresql");
-      setVersion("15");
-      setProjectId("");
-      setMaxCpu(1);
-      setMaxRamMb(512);
-      setMaxStorageMb(1024);
-      setOpen(false);
-      onDatabaseCreated();
     } catch (error: any) {
       setError(error.message);
       console.error("Error creating database:", error);
@@ -157,6 +198,7 @@ export default function CreateDatabaseDialog({
       setLoading(false);
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -167,15 +209,14 @@ export default function CreateDatabaseDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create Database</DialogTitle>
+      <DialogContent className="p-0 gap-0! bg-card">
+        <DialogHeader className="border-b border-border p-4 mb-0! gap-0">
+          <DialogTitle className="text-xl font-medium">Create Database</DialogTitle>
           <DialogDescription>
-            Create a new database connection. Enter a name and select the
-            database type.
+            Provision a new Postgres instance
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="p-4">
           <div className="grid gap-4 py-4">
             {error && (
               <div className="p-3 text-sm bg-red-500/10 border border-red-500/20 text-red-400 rounded-md">
@@ -183,19 +224,20 @@ export default function CreateDatabaseDialog({
               </div>
             )}
             <div className="grid gap-2">
-              <Label htmlFor="name">Database Name</Label>
+              <Label htmlFor="name" className="text-neutral-400 uppercase tracking-wider text-xs font-medium">Database Name</Label>
               <Input
                 id="name"
                 placeholder="my-database"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                className="w-full"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="project">Project</Label>
+              <Label htmlFor="project" className="text-neutral-400 uppercase tracking-wider text-xs font-medium">Project</Label>
               <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a project" />
                 </SelectTrigger>
                 <SelectContent>
@@ -213,25 +255,12 @@ export default function CreateDatabaseDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="type">Database Type</Label>
-              <Select value={type} onValueChange={setType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select database type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                  <SelectItem value="mysql">MySQL</SelectItem>
-                  <SelectItem value="mongodb">MongoDB</SelectItem>
-                  <SelectItem value="redis">Redis</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
             {type === "postgresql" && (
               <div className="grid gap-2">
-                <Label htmlFor="version">PostgreSQL Version</Label>
+                <Label htmlFor="version" className="text-neutral-400 uppercase tracking-wider text-xs font-medium">PostgreSQL Version</Label>
                 <Select value={version} onValueChange={setVersion}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select version" />
                   </SelectTrigger>
                   <SelectContent>
@@ -245,19 +274,19 @@ export default function CreateDatabaseDialog({
             )}
 
             {/* Resource Limits Section */}
-            <div className="border-t border-border pt-4 mt-2">
-              <h3 className="text-sm font-medium text-neutral-200 mb-3">
+            <div className="border-y border-border py-4 mt-2">
+              <h3 className="text-neutral-400 uppercase tracking-wider text-xs font-medium mb-3">
                 Resource Limits
               </h3>
 
-              <div className="grid gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="grid gap-1">
-                  <Label htmlFor="maxCpu">CPU Cores</Label>
+                  <Label htmlFor="maxCpu" className="text-neutral-400 uppercase tracking-wider text-[10px] font-normal flex items-center gap-1"><CpuIcon size={12} />CPU Cores</Label>
                   <Select
                     value={String(maxCpu)}
                     onValueChange={(value) => setMaxCpu(parseFloat(value))}
                   >
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -271,12 +300,12 @@ export default function CreateDatabaseDialog({
                 </div>
 
                 <div className="grid gap-1">
-                  <Label htmlFor="maxRamMb">RAM</Label>
+                  <Label htmlFor="maxRamMb" className="text-neutral-400 uppercase tracking-wider text-[10px] font-normal flex items-center gap-1"><MemoryIcon size={12} />RAM</Label>
                   <Select
                     value={String(maxRamMb)}
                     onValueChange={(value) => setMaxRamMb(parseInt(value))}
                   >
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -291,12 +320,12 @@ export default function CreateDatabaseDialog({
                 </div>
 
                 <div className="grid gap-1">
-                  <Label htmlFor="maxStorageMb">Storage</Label>
+                  <Label htmlFor="maxStorageMb" className="text-neutral-400 uppercase tracking-wider text-[10px] font-normal flex items-center gap-1"><HardDriveIcon size={12} />Storage</Label>
                   <Select
                     value={String(maxStorageMb)}
                     onValueChange={(value) => setMaxStorageMb(parseInt(value))}
                   >
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -310,10 +339,19 @@ export default function CreateDatabaseDialog({
                 </div>
               </div>
             </div>
+            {loading && (
+              <div className="grid gap-2">
+                <div className="flex justify-between text-[10px] font-medium uppercase tracking-wider">
+                  <span className="text-neutral-400">{statusMessage}</span>
+                  <span className="text-primary">{Math.round(progress)}%</span>
+                </div>
+                <Progress value={progress} className="h-1" />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading}>
-              {loading ? "Creating..." : "Create Database"}
+              {loading ? "Provisioning..." : "Create Database"}
             </Button>
           </DialogFooter>
         </form>
