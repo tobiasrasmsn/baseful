@@ -156,8 +156,13 @@ else
     warn "Existing .env file found. Skipping configuration."
 fi
 
+info "[4/6] Creating log directories..."
+sudo mkdir -p /var/log/proxy
+sudo chmod 755 /var/log/proxy
+success "✓ Log directories ready."
+
 # 4. Docker Network Setup
-info "[4/6] Initializing Docker network..."
+info "[4.5/6] Initializing Docker network..."
 if ! docker network ls | grep -q "baseful-network"; then
     docker network create baseful-network
     success "✓ Created baseful-network."
