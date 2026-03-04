@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { TableIcon, CaretUp, CaretDown, CaretUpDown } from "@phosphor-icons/react";
+import {
+  TableIcon,
+  CaretUp,
+  CaretDown,
+  CaretUpDown,
+} from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -44,7 +49,7 @@ export default function Tables() {
   const { selectedDatabase } = useDatabase();
   const { token, logout } = useAuth();
   const [tables, setTables] = useState<TableInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTableName, setSelectedTableName] = useState<string | null>(
     null,
@@ -67,7 +72,6 @@ export default function Tables() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const hasChanges = Object.keys(editedCells).length > 0;
-
 
   const handleCellChange = (
     rowIndex: number,
@@ -107,7 +111,7 @@ export default function Tables() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ primaryKey, updates }),
         },
-        logout
+        logout,
       );
 
       if (!res.ok) throw new Error("Failed to save changes");
@@ -137,7 +141,12 @@ export default function Tables() {
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch(`/api/databases/${id}/tables`, token, {}, logout);
+      const res = await authFetch(
+        `/api/databases/${id}/tables`,
+        token,
+        {},
+        logout,
+      );
       if (!res.ok) throw new Error("Failed to fetch tables");
       const data = await res.json();
       setTables(data || []);
@@ -222,11 +231,10 @@ export default function Tables() {
         filterOp,
         filterVal,
         columnName,
-        newOrder
+        newOrder,
       );
     }
   };
-
 
   if (error) {
     return (
@@ -244,7 +252,10 @@ export default function Tables() {
       {/* Header */}
       <div className="flex flex-row border-b border-border p-4 items-center gap-4 w-full">
         <div className="flex flex-row items-center gap-3 flex-1">
-          <DitherAvatar value={selectedDatabase?.name || "database"} size={32} />
+          <DitherAvatar
+            value={selectedDatabase?.name || "database"}
+            size={32}
+          />
 
           <div className="flex flex-row items-center gap-2">
             <h1 className="text-2xl font-medium text-neutral-100">Tables</h1>
@@ -276,17 +287,16 @@ export default function Tables() {
             <div className="overflow-y-auto flex-1 flex flex-col gap-1">
               {tables.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center">
-                  <p className="text-neutral-400">
-                    No tables found
-                  </p>
+                  <p className="text-neutral-400">No tables found</p>
                 </div>
               ) : (
                 tables?.map((table, i) => (
                   <button
                     key={i}
                     onClick={() => table.name && fetchTableData(table.name)}
-                    className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${selectedTableName === table.name ? "bg-muted/75" : ""
-                      }`}
+                    className={`w-full rounded-md flex flex-row items-center justify-between text-left px-3 py-1.5  hover:bg-neutral-800/50 transition-colors ${
+                      selectedTableName === table.name ? "bg-muted/75" : ""
+                    }`}
                   >
                     <div className="flex flex-row items-center gap-2">
                       <TableIcon
@@ -298,10 +308,11 @@ export default function Tables() {
                         }
                       />
                       <span
-                        className={`text-base ${selectedTableName === table.name
-                          ? "text-neutral-100"
-                          : "text-neutral-200"
-                          }`}
+                        className={`text-base ${
+                          selectedTableName === table.name
+                            ? "text-neutral-100"
+                            : "text-neutral-200"
+                        }`}
                       >
                         {table.name}
                       </span>
@@ -330,7 +341,10 @@ export default function Tables() {
                 <div className="border-b border-border relative">
                   {tableLoading && (
                     <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-600/30 overflow-hidden z-10">
-                      <div className="h-full bg-blue-500 animate-[loading_1s_infinite_ease-in-out]" style={{ width: '40%' }}></div>
+                      <div
+                        className="h-full bg-blue-500 animate-[loading_1s_infinite_ease-in-out]"
+                        style={{ width: "40%" }}
+                      ></div>
                     </div>
                   )}
                   <div className="flex flex-row items-center justify-between gap-3 p-4">
@@ -366,9 +380,11 @@ export default function Tables() {
                   {/* Filter UI */}
                   <div className="flex flex-row items-center border-t">
                     <div className="flex flex-col items-start gap-1.5 h-full">
-
                       <Select value={filterCol} onValueChange={setFilterCol}>
-                        <SelectTrigger size="sm" className="w-[180px] h-8 bg-transparent! rounded-none! border-border border-y-0! border-r! border-l-0!">
+                        <SelectTrigger
+                          size="sm"
+                          className="w-[180px] h-8 bg-transparent! rounded-none! border-border border-y-0! border-r! border-l-0!"
+                        >
                           <SelectValue placeholder="Column" />
                         </SelectTrigger>
                         <SelectContent>
@@ -381,9 +397,11 @@ export default function Tables() {
                       </Select>
                     </div>
                     <div className="flex flex-col items-start gap-1.5">
-
                       <Select value={filterOp} onValueChange={setFilterOp}>
-                        <SelectTrigger size="sm" className="w-[180px] h-8 bg-transparent! rounded-none! border-border border-y-0! border-r! border-l-0!">
+                        <SelectTrigger
+                          size="sm"
+                          className="w-[180px] h-8 bg-transparent! rounded-none! border-border border-y-0! border-r! border-l-0!"
+                        >
                           <SelectValue placeholder="Operator" />
                         </SelectTrigger>
                         <SelectContent>
@@ -395,7 +413,9 @@ export default function Tables() {
                     <div className="flex-1 flex flex-row items-center border-none h-8 min-w-0">
                       <div className="flex-1 flex flex-row items-center px-1">
                         {(() => {
-                          const col = selectedTable.columns.find((c) => c.name === filterCol);
+                          const col = selectedTable.columns.find(
+                            (c) => c.name === filterCol,
+                          );
                           const columnType = col?.type?.toLowerCase() || "";
 
                           const isBool =
@@ -426,10 +446,20 @@ export default function Tables() {
                                 value={filterVal}
                                 onValueChange={(val) => {
                                   setFilterVal(val);
-                                  fetchTableData(selectedTable.name, 1, rowsPerPage, filterCol, filterOp, val);
+                                  fetchTableData(
+                                    selectedTable.name,
+                                    1,
+                                    rowsPerPage,
+                                    filterCol,
+                                    filterOp,
+                                    val,
+                                  );
                                 }}
                               >
-                                <SelectTrigger size="sm" className="h-8 bg-transparent! rounded-none! border-none! flex-1 text-left">
+                                <SelectTrigger
+                                  size="sm"
+                                  className="h-8 bg-transparent! rounded-none! border-none! flex-1 text-left"
+                                >
                                   <SelectValue placeholder="Select TRUE/FALSE" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -442,14 +472,26 @@ export default function Tables() {
 
                           return (
                             <Input
-                              type={isNumeric ? "number" : isDate ? (columnType.includes("timestamp") ? "datetime-local" : "date") : "text"}
+                              type={
+                                isNumeric
+                                  ? "number"
+                                  : isDate
+                                    ? columnType.includes("timestamp")
+                                      ? "datetime-local"
+                                      : "date"
+                                    : "text"
+                              }
                               value={filterVal}
                               onChange={(e) => setFilterVal(e.target.value)}
                               placeholder="Value..."
                               className="h-8 bg-transparent! focus:ring-0! focus:border-border! focus:outline-none! rounded-none! border-none! text-xs flex-1"
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
-                                  fetchTableData(selectedTable.name, 1, rowsPerPage);
+                                  fetchTableData(
+                                    selectedTable.name,
+                                    1,
+                                    rowsPerPage,
+                                  );
                                 }
                               }}
                             />
@@ -458,7 +500,9 @@ export default function Tables() {
                       </div>
                       <div className="flex flex-row shrink-0 border-l border-border h-8">
                         <button
-                          onClick={() => fetchTableData(selectedTable.name, 1, rowsPerPage)}
+                          onClick={() =>
+                            fetchTableData(selectedTable.name, 1, rowsPerPage)
+                          }
                           className="h-full px-4 text-xs font-medium text-background bg-primary hover:bg-primary transition-colors shrink-0"
                         >
                           Search
@@ -468,7 +512,14 @@ export default function Tables() {
                             onClick={() => {
                               setFilterCol("");
                               setFilterVal("");
-                              fetchTableData(selectedTable.name, 1, rowsPerPage, "", "equals", "");
+                              fetchTableData(
+                                selectedTable.name,
+                                1,
+                                rowsPerPage,
+                                "",
+                                "equals",
+                                "",
+                              );
                             }}
                             className="h-full px-4 bg-neutral-800! text-xs font-medium text-neutral-400 hover:text-neutral-200 transition-colors border-l border-border/50"
                           >
@@ -502,16 +553,29 @@ export default function Tables() {
                                       onClick={() => handleSort(col.name)}
                                       className="w-full h-full flex flex-row items-center justify-between gap-2 px-2 py-2 hover:bg-neutral-800 transition-colors group"
                                     >
-                                      <span className="truncate">{col.name}</span>
+                                      <span className="truncate">
+                                        {col.name}
+                                      </span>
                                       <div className="shrink-0 flex items-center">
                                         {sortBy === col.name ? (
                                           sortOrder === "asc" ? (
-                                            <CaretUp size={12} weight="bold" className="text-foreground" />
+                                            <CaretUp
+                                              size={12}
+                                              weight="bold"
+                                              className="text-foreground"
+                                            />
                                           ) : (
-                                            <CaretDown size={12} weight="bold" className="text-foreground" />
+                                            <CaretDown
+                                              size={12}
+                                              weight="bold"
+                                              className="text-foreground"
+                                            />
                                           )
                                         ) : (
-                                          <CaretUpDown size={12} className="text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                          <CaretUpDown
+                                            size={12}
+                                            className="text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          />
                                         )}
                                       </div>
                                     </button>
@@ -521,10 +585,7 @@ export default function Tables() {
                             </thead>
                             <tbody>
                               {selectedTable.rows?.map((row, i) => (
-                                <tr
-                                  key={i}
-                                  className="hover:bg-neutral-800/50"
-                                >
+                                <tr key={i} className="hover:bg-neutral-800/50">
                                   {selectedTable.columns?.map((col, j) => {
                                     const cellKey = `${i}|||${col.name}`;
                                     const value =
@@ -545,10 +606,10 @@ export default function Tables() {
                                               value === null
                                                 ? "NULL"
                                                 : value === true ||
-                                                  value === "true" ||
-                                                  value === "t" ||
-                                                  value === 1 ||
-                                                  value === "1"
+                                                    value === "true" ||
+                                                    value === "t" ||
+                                                    value === 1 ||
+                                                    value === "1"
                                                   ? "true"
                                                   : "false"
                                             }
@@ -607,8 +668,11 @@ export default function Tables() {
                                         <Popover>
                                           <PopoverTrigger asChild>
                                             <button
-                                              className={`h-7 w-full border-none bg-transparent px-1 font-mono text-xs text-left truncate focus:outline-none hover:bg-neutral-800/30 rounded transition-colors ${isEdited ? "text-blue-300" : "text-neutral-200"
-                                                }`}
+                                              className={`h-7 w-full border-none bg-transparent px-1 font-mono text-xs text-left truncate focus:outline-none hover:bg-neutral-800/30 rounded transition-colors ${
+                                                isEdited
+                                                  ? "text-blue-300"
+                                                  : "text-neutral-200"
+                                              }`}
                                             >
                                               {value === null ? (
                                                 <span className="text-neutral-600 italic">
@@ -624,7 +688,9 @@ export default function Tables() {
                                               <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
                                                 Edit {col.name} ({columnType})
                                               </div>
-                                              {!isBool && !isNumeric && !isDate ? (
+                                              {!isBool &&
+                                              !isNumeric &&
+                                              !isDate ? (
                                                 <Textarea
                                                   value={
                                                     value === null
@@ -653,8 +719,8 @@ export default function Tables() {
                                                       ? "number"
                                                       : isDate
                                                         ? columnType.includes(
-                                                          "time",
-                                                        )
+                                                            "time",
+                                                          )
                                                           ? "datetime-local"
                                                           : "date"
                                                         : "text"
@@ -837,26 +903,13 @@ export default function Tables() {
   );
 }
 
-const SidebarSkeleton = () => (
-  <div className="flex flex-col gap-1 w-full">
-    {Array.from({ length: 6 }).map((_, i) => (
-      <div key={i} className="flex flex-row items-center gap-2 py-1.5 px-3">
-        <Skeleton className="h-4 w-4 rounded-sm opacity-50" />
-        <Skeleton className="h-6 w-[60%] rounded-sm opacity-50" />
-      </div>
-    ))}
-  </div>
-);
-
 const TableSkeleton = ({ name }: { name: string | null }) => (
   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
     {/* Table Tool Bar Skeleton */}
     <div className="border-b border-border">
       <div className="flex flex-row items-center justify-between gap-3 p-4">
         <div>
-          <h2 className="text-2xl font-medium text-neutral-100">
-            {name}
-          </h2>
+          <h2 className="text-2xl font-medium text-neutral-100">{name}</h2>
           <Skeleton className="h-4 w-32 mt-1" />
         </div>
       </div>
@@ -881,7 +934,10 @@ const TableSkeleton = ({ name }: { name: string | null }) => (
           <thead className="bg-[#141414]!">
             <tr className="sticky top-0 z-20">
               {Array.from({ length: 6 }).map((_, i) => (
-                <th key={i} className="text-left bg-[#141414]! py-[8px] px-2 border-b border-r border-border last:border-r-0">
+                <th
+                  key={i}
+                  className="text-left bg-[#141414]! py-[8px] px-2 border-b border-r border-border last:border-r-0"
+                >
                   <Skeleton className="h-5 w-20" />
                 </th>
               ))}
@@ -891,7 +947,10 @@ const TableSkeleton = ({ name }: { name: string | null }) => (
             {Array.from({ length: 20 }).map((_, i) => (
               <tr key={i} className="">
                 {Array.from({ length: 6 }).map((_, j) => (
-                  <td key={j} className="py-[8px] px-2 border-b border-r border-border last:border-r-0">
+                  <td
+                    key={j}
+                    className="py-[8px] px-2 border-b border-r border-border last:border-r-0"
+                  >
                     <Skeleton className="h-5 w-full opacity-30" />
                   </td>
                 ))}
