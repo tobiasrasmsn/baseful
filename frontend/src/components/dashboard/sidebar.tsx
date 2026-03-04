@@ -469,7 +469,7 @@ export default function Sidebar() {
                     weight="bold"
                     className="text-neutral-400"
                   />
-                  <span>Security</span>
+                  <span>Securitye</span>
                 </Link>
               </li>
             </ul>
