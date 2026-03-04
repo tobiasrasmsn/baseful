@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Baseful Installation Script
-# This script automates the setup of Baseful on a VPS.
 # Usage: curl -sSL https://raw.githubusercontent.com/tobiasrasmsn/baseful/main/install.sh | bash
 # Works for both root and non-root users (non-root requires sudo access).
 
@@ -32,7 +31,7 @@ warn()    { printf "%b%s%b\n" "$YELLOW" "$1" "$NC"; }
 error()   { printf "%b%b%s%b\n" "$RED" "$BOLD" "$1" "$NC"; }
 
 # Helper to run docker commands — uses sudo for non-root until group is active
-run_docker() { $SUDO docker "$@"; }
+run_docker()         { $SUDO docker "$@"; }
 run_docker_compose() { $SUDO $DOCKER_COMPOSE_CMD "$@"; }
 
 # Clear screen and show banner
@@ -52,19 +51,36 @@ printf "%b" "$NC"
 echo "------------------------------------------------"
 
 # ============================================================
+# Pre-flight: Ask about security hardening
+# ============================================================
+printf "\n"
+info "Security hardening installs UFW, Fail2ban, and unattended upgrades."
+printf "Apply security hardening? (yes/no) [yes]: "
+read -r HARDEN < /dev/tty
+# Default to yes if empty
+if [ -z "$HARDEN" ]; then
+    HARDEN="yes"
+fi
+if [ "$HARDEN" = "yes" ] || [ "$HARDEN" = "y" ]; then
+    DO_HARDEN=1
+    success "✓ Security hardening will be applied."
+else
+    DO_HARDEN=0
+    warn "Skipping security hardening."
+fi
+printf "\n"
+
+# ============================================================
 # [1/8] System Requirements Check
 # ============================================================
 info "[1/8] Checking system requirements..."
 
 if ! command -v docker >/dev/null 2>&1; then
     warn "Docker not found. Installing Docker..."
-    curl -fsSL https://get.docker.com | sh
+    curl -fsSL https://get.docker.com | sh > /dev/null 2>&1
     if command -v systemctl >/dev/null 2>&1; then
-        $SUDO systemctl enable --now docker
+        $SUDO systemctl enable --now docker > /dev/null 2>&1
     fi
-    # For non-root: add to docker group
-    # We use sudo docker for all docker commands in this session to avoid
-    # needing a re-login. The group membership takes effect on next login.
     if [ "$(id -u)" -ne 0 ]; then
         $SUDO usermod -aG docker "$(whoami)"
         warn "Added $(whoami) to the docker group (takes effect on next login)."
@@ -72,7 +88,6 @@ if ! command -v docker >/dev/null 2>&1; then
     fi
 fi
 
-# Detect docker compose command
 if $SUDO docker compose version >/dev/null 2>&1; then
     DOCKER_COMPOSE_CMD="docker compose"
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -86,9 +101,9 @@ fi
 if ! command -v git >/dev/null 2>&1; then
     warn "Git not found. Installing git..."
     if command -v apt-get >/dev/null 2>&1; then
-        $SUDO apt-get update -qq && $SUDO apt-get install -y git
+        $SUDO apt-get update -qq && $SUDO apt-get install -y git > /dev/null 2>&1
     elif command -v yum >/dev/null 2>&1; then
-        $SUDO yum install -y git
+        $SUDO yum install -y git > /dev/null 2>&1
     fi
 fi
 
@@ -167,7 +182,7 @@ success "✓ Log directories ready."
 # ============================================================
 info "[5/8] Initializing Docker network..."
 if ! run_docker network ls | grep -q "baseful-network"; then
-    run_docker network create baseful-network
+    run_docker network create baseful-network > /dev/null
     success "✓ Created baseful-network."
 else
     success "✓ baseful-network already exists."
@@ -184,37 +199,38 @@ success "✓ Services started."
 # ============================================================
 # [7/8] Security Hardening
 # ============================================================
-info "[7/8] Applying security hardening..."
+if [ "$DO_HARDEN" -eq 1 ]; then
+    info "[7/8] Applying security hardening..."
 
-# --- UFW ---
-if ! command -v ufw >/dev/null 2>&1; then
-    $SUDO apt-get install -y ufw
-fi
+    # --- UFW ---
+    if ! command -v ufw >/dev/null 2>&1; then
+        $SUDO apt-get install -y ufw > /dev/null 2>&1
+    fi
 
-if ! $SUDO ufw status | grep -q "Status: active"; then
-    info "Configuring firewall..."
-    $SUDO ufw default deny incoming
-    $SUDO ufw default allow outgoing
-    $SUDO ufw allow 22/tcp
-    $SUDO ufw allow 80/tcp
-    $SUDO ufw allow 443/tcp
-    $SUDO ufw allow 3000/tcp
-    $SUDO ufw allow 6432/tcp
-    echo "y" | $SUDO ufw enable
-    success "✓ UFW firewall configured."
-else
-    warn "UFW already active. Skipping — review rules with: ${SUDO} ufw status"
-fi
+    if ! $SUDO ufw status | grep -q "Status: active"; then
+        info "Configuring firewall..."
+        $SUDO ufw default deny incoming  > /dev/null 2>&1
+        $SUDO ufw default allow outgoing > /dev/null 2>&1
+        $SUDO ufw allow 22/tcp           > /dev/null 2>&1
+        $SUDO ufw allow 80/tcp           > /dev/null 2>&1
+        $SUDO ufw allow 443/tcp          > /dev/null 2>&1
+        $SUDO ufw allow 3000/tcp         > /dev/null 2>&1
+        $SUDO ufw allow 6432/tcp         > /dev/null 2>&1
+        echo "y" | $SUDO ufw enable      > /dev/null 2>&1
+        success "✓ UFW firewall configured."
+    else
+        warn "UFW already active. Skipping — review rules with: ${SUDO} ufw status"
+    fi
 
-# --- Fail2ban ---
-if ! command -v fail2ban-client >/dev/null 2>&1; then
-    $SUDO apt-get update -qq
-    $SUDO apt-get install -y fail2ban
-fi
+    # --- Fail2ban ---
+    if ! command -v fail2ban-client >/dev/null 2>&1; then
+        $SUDO apt-get update -qq         > /dev/null 2>&1
+        $SUDO apt-get install -y fail2ban > /dev/null 2>&1
+    fi
 
-if [ ! -f /etc/fail2ban/jail.local ]; then
-    info "Configuring Fail2ban..."
-    $SUDO tee /etc/fail2ban/jail.local > /dev/null << 'JAIL'
+    if [ ! -f /etc/fail2ban/jail.local ]; then
+        info "Configuring Fail2ban..."
+        $SUDO tee /etc/fail2ban/jail.local > /dev/null << 'JAIL'
 [DEFAULT]
 bantime  = 1h
 findtime = 10m
@@ -236,36 +252,39 @@ findtime = 5m
 bantime  = 1h
 JAIL
 
-    $SUDO tee /etc/fail2ban/filter.d/baseful-proxy.conf > /dev/null << 'FILTER'
+        $SUDO tee /etc/fail2ban/filter.d/baseful-proxy.conf > /dev/null << 'FILTER'
 [Definition]
 failregex = ^\{"timestamp":"[^"]+","level":"WARNING","component":"proxy","message":"(?:Connection failed|Token expired|Token revoked)[^"]*","connection":\{"remote_ip":"<HOST>:
 ignoreregex =
 FILTER
 
-    $SUDO systemctl enable fail2ban
-    $SUDO systemctl restart fail2ban
-    success "✓ Fail2ban configured (SSH + proxy jails active)."
-else
-    warn "Fail2ban jail.local already exists. Skipping."
-fi
+        $SUDO systemctl enable fail2ban > /dev/null 2>&1
+        $SUDO systemctl restart fail2ban > /dev/null 2>&1
+        success "✓ Fail2ban configured (SSH + proxy jails active)."
+    else
+        warn "Fail2ban jail.local already exists. Skipping."
+    fi
 
-# --- Unattended Upgrades ---
-if ! dpkg -l 2>/dev/null | grep -q unattended-upgrades; then
-    $SUDO apt-get install -y unattended-upgrades
-fi
+    # --- Unattended Upgrades ---
+    if ! dpkg -l 2>/dev/null | grep -q unattended-upgrades; then
+        $SUDO apt-get install -y unattended-upgrades > /dev/null 2>&1
+    fi
 
-if [ ! -f /etc/apt/apt.conf.d/20auto-upgrades ]; then
-    info "Enabling unattended security upgrades..."
-    $SUDO tee /etc/apt/apt.conf.d/20auto-upgrades > /dev/null << 'UPGRADES'
+    if [ ! -f /etc/apt/apt.conf.d/20auto-upgrades ]; then
+        info "Enabling unattended security upgrades..."
+        $SUDO tee /etc/apt/apt.conf.d/20auto-upgrades > /dev/null << 'UPGRADES'
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 UPGRADES
-    success "✓ Automatic security upgrades enabled."
-else
-    warn "Unattended upgrades already configured. Skipping."
-fi
+        success "✓ Automatic security upgrades enabled."
+    else
+        warn "Unattended upgrades already configured. Skipping."
+    fi
 
-success "✓ Security hardening complete."
+    success "✓ Security hardening complete."
+else
+    info "[7/8] Skipping security hardening."
+fi
 
 # ============================================================
 # [8/8] Finalization
@@ -280,11 +299,13 @@ echo "------------------------------------------------"
 printf "\033[1mDashboard:\033[0m      http://%s:3000\n" "$PUBLIC_IP"
 printf "\033[1mDatabase Proxy:\033[0m %s:6432\n" "$PUBLIC_IP"
 echo "------------------------------------------------"
-printf "\033[1mSecurity:\033[0m\n"
-printf "  ✔ UFW firewall active\n"
-printf "  ✔ Fail2ban active (SSH + proxy)\n"
-printf "  ✔ Automatic security upgrades enabled\n"
-echo "------------------------------------------------"
+if [ "$DO_HARDEN" -eq 1 ]; then
+    printf "\033[1mSecurity:\033[0m\n"
+    printf "  ✔ UFW firewall active\n"
+    printf "  ✔ Fail2ban active (SSH + proxy)\n"
+    printf "  ✔ Automatic security upgrades enabled\n"
+    echo "------------------------------------------------"
+fi
 warn "Recommended next steps (manual):"
 printf "1. Set up Tailscale and lock SSH behind it\n"
 printf "2. Harden SSH: disable password auth, set ListenAddress\n"
