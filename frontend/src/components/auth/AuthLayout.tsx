@@ -14,7 +14,7 @@ export default function AuthLayout() {
           <div className="z-10 mt-auto">
             <blockquote className="space-y-2">
               <p className="text-lg">
-                &ldquo;The Open Source, Self Hosted alternative to Neon.&rdquo;
+                &ldquo;The open source, self hosted alternative to Neon.&rdquo;
               </p>
             </blockquote>
           </div>
