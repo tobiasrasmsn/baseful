@@ -1057,6 +1057,43 @@ func main() {
 		})
 	})
 
+	// Update project
+	r.PUT("/api/projects/:id", func(c *gin.Context) {
+		id := c.Param("id")
+
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := c.BindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request"})
+			return
+		}
+
+		if strings.TrimSpace(req.Name) == "" {
+			c.JSON(400, gin.H{"error": "Project name is required"})
+			return
+		}
+
+		result, err := db.DB.Exec(
+			"UPDATE projects SET name = ? WHERE id = ?",
+			strings.TrimSpace(req.Name), id,
+		)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to update project: " + err.Error()})
+			return
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil || rowsAffected == 0 {
+			c.JSON(404, gin.H{"error": "Project not found"})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"message": "Project updated",
+		})
+	})
+
 	// Get databases for a project
 	r.GET("/api/projects/:id/databases", func(c *gin.Context) {
 		id := c.Param("id")

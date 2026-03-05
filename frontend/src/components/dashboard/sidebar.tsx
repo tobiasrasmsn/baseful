@@ -1,4 +1,5 @@
 import {
+  CheckIcon,
   CaretDownIcon,
   ClockCounterClockwiseIcon,
   CubeIcon,
@@ -6,11 +7,14 @@ import {
   Globe,
   GraphIcon,
   HouseIcon,
+  PencilSimpleIcon,
   PlusIcon,
   TableIcon,
   TerminalIcon,
   LockIcon,
   UsersIcon,
+  XIcon,
+  NotePencilIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -30,11 +34,44 @@ import { DitherAvatar } from "../ui/hash-avatar";
 export default function Sidebar() {
   const { selectedDatabase, setSelectedDatabase, databases, refreshDatabases } =
     useDatabase();
-  const { projects, refreshProjects } = useProject();
+  const { projects, refreshProjects, updateProjectName } = useProject();
   const { user } = useAuth();
   const location = useLocation();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState("");
+  const [isSavingProjectName, setIsSavingProjectName] = useState(false);
+
+  const startProjectEdit = (projectId: number, currentName: string) => {
+    setEditingProjectId(projectId);
+    setEditingProjectName(currentName);
+  };
+
+  const cancelProjectEdit = () => {
+    setEditingProjectId(null);
+    setEditingProjectName("");
+  };
+
+  const saveProjectEdit = async () => {
+    if (!editingProjectId || isSavingProjectName) return;
+
+    const trimmedName = editingProjectName.trim();
+    const existingProject = projects.find((p) => p.id === editingProjectId);
+
+    if (!trimmedName || trimmedName === existingProject?.name) {
+      cancelProjectEdit();
+      return;
+    }
+
+    setIsSavingProjectName(true);
+    const success = await updateProjectName(editingProjectId, trimmedName);
+    setIsSavingProjectName(false);
+
+    if (success) {
+      cancelProjectEdit();
+    }
+  };
 
   useEffect(() => {
     const pathParts = location.pathname.split("/");
@@ -130,9 +167,78 @@ export default function Sidebar() {
                     {dbs.length > 0 && (
                       <>
                         <div className="flex flex-row items-center mb-1">
-                          <p className="text-xs text-neutral-400 px-2 font-normal">
-                            {getProjectName(parseInt(projectId) || undefined)}
-                          </p>
+                          {parseInt(projectId) > 0 &&
+                          editingProjectId === parseInt(projectId) ? (
+                            <div className="flex items-center gap-1 w-full px-1">
+                              <input
+                                value={editingProjectName}
+                                onChange={(e) =>
+                                  setEditingProjectName(e.target.value)
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void saveProjectEdit();
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    cancelProjectEdit();
+                                  }
+                                }}
+                                className="h-4 w-full rounded-sm focus:ring-0 border border-neutral-800 bg-neutral-900 px-2 text-xs text-neutral-100 outline-none focus:border-neutral-700"
+                                autoFocus
+                                disabled={isSavingProjectName}
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void saveProjectEdit();
+                                }}
+                                className="text-neutral-400 hover:text-neutral-200 transition-colors disabled:opacity-50"
+                                disabled={isSavingProjectName}
+                                aria-label="Save project name"
+                              >
+                                <CheckIcon size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelProjectEdit();
+                                }}
+                                className="text-neutral-400 hover:text-neutral-200 transition-colors"
+                                aria-label="Cancel project name edit"
+                              >
+                                <XIcon size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-xs text-neutral-400 px-2 font-normal">
+                                {getProjectName(
+                                  parseInt(projectId) || undefined,
+                                )}
+                              </p>
+                              {parseInt(projectId) > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startProjectEdit(
+                                      parseInt(projectId),
+                                      getProjectName(parseInt(projectId)),
+                                    );
+                                  }}
+                                  className="ml-1 -translate-y-px text-neutral-500 hover:text-neutral-300 transition-colors"
+                                  aria-label="Edit project name"
+                                >
+                                  <NotePencilIcon size={12} />
+                                </button>
+                              )}
+                            </>
+                          )}
                         </div>
                         <ul className="flex flex-col gap-1">
                           {dbs.map((db) => (
@@ -366,7 +472,11 @@ export default function Sidebar() {
                 to="/monitoring"
                 className="text-neutral-100 text-sm flex flex-row items-center gap-2"
               >
-                <GraphIcon size={18} weight="bold" className="text-neutral-400" />
+                <GraphIcon
+                  size={18}
+                  weight="bold"
+                  className="text-neutral-400"
+                />
                 <span>Monitoring</span>
               </Link>
             </li>
@@ -379,7 +489,11 @@ export default function Sidebar() {
                 to="/containers"
                 className="text-neutral-100 text-sm flex flex-row items-center gap-2"
               >
-                <CubeIcon size={18} weight="bold" className="text-neutral-400" />
+                <CubeIcon
+                  size={18}
+                  weight="bold"
+                  className="text-neutral-400"
+                />
                 <span>Containers</span>
               </Link>
             </li>
@@ -405,7 +519,11 @@ export default function Sidebar() {
                 to="/security"
                 className="text-neutral-100 text-sm flex flex-row items-center gap-2"
               >
-                <LockIcon size={18} weight="bold" className="text-neutral-400" />
+                <LockIcon
+                  size={18}
+                  weight="bold"
+                  className="text-neutral-400"
+                />
                 <span>Security</span>
               </Link>
             </li>

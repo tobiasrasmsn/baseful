@@ -22,6 +22,7 @@ interface ProjectContextType {
   projects: Project[];
   refreshProjects: () => Promise<void>;
   createProject: (name: string, description: string) => Promise<Project | null>;
+  updateProjectName: (projectId: number, name: string) => Promise<boolean>;
 }
 
 const ProjectContext = createContext<ProjectContextType | null>(null);
@@ -101,6 +102,32 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
     }
   };
 
+  const updateProjectName = async (
+    projectId: number,
+    name: string,
+  ): Promise<boolean> => {
+    try {
+      const response = await authFetch(`/api/projects/${projectId}`, token, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name }),
+      }, logout);
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to update project");
+      }
+
+      await fetchProjects();
+      return true;
+    } catch (error) {
+      console.error("Error updating project:", error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (token) {
       fetchProjects();
@@ -115,6 +142,7 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
         projects,
         refreshProjects: fetchProjects,
         createProject,
+        updateProjectName,
       }}
     >
       {children}
