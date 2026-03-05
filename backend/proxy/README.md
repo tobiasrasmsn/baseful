@@ -50,7 +50,6 @@ Client → Proxy (JWT Auth) → Connection Pool → PostgreSQL Database
 | `PROXY_HOST` | `localhost` | Host for connection strings |
 | `JWT_SECRET` | (generated) | Secret for JWT signing/validation |
 | `PROXY_IDLE_TIMEOUT` | `30m` | Idle connection timeout duration |
-| `PROXY_SSL_ENABLED` | `false` | Enable SSL/TLS termination |
 | `PROXY_CERT_FILE` | - | Path to TLS certificate file |
 | `PROXY_KEY_FILE` | - | Path to TLS private key file |
 | `PROXY_LOG_PATH` | - | Path to log file for persistent logging |
@@ -60,12 +59,12 @@ Client → Proxy (JWT Auth) → Connection Pool → PostgreSQL Database
 Clients connect using this format:
 
 ```
-postgresql://token:<JWT_TOKEN>@<PROXY_HOST>:<PROXY_PORT>/db_<DATABASE_ID>
+postgresql://token:<JWT_TOKEN>@<PROXY_HOST>:<PROXY_PORT>/db_<DATABASE_ID>?sslmode=require
 ```
 
 Example:
 ```
-postgresql://token:eyJhbGc...@localhost:6432/db_123
+postgresql://token:eyJhbGc...@localhost:6432/db_123?sslmode=require
 ```
 
 ## Security Features
@@ -106,14 +105,14 @@ This prevents resource exhaustion from abandoned connections and ensures the pro
 
 ### SSL/TLS Termination
 
-The proxy supports SSL/TLS termination for secure client connections:
+The proxy enforces SSL/TLS for all client connections:
 
 - **TLS 1.2/1.3 support**: Modern cipher suites only
 - **Self-signed certificates**: Auto-generated for development
 - **Custom certificates**: Load from files for production
 - **mTLS support**: Optional client certificate verification
 
-Enable TLS by setting `PROXY_SSL_ENABLED=true` and providing certificate files.
+Clients must negotiate TLS before PostgreSQL startup/authentication. Use `sslmode=require` (or stricter).
 
 ### Structured Logging
 

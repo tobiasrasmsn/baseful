@@ -26,47 +26,15 @@ import CreateProjectDialog from "@/components/project/CreateProjectDialog";
 import { useDatabase } from "@/context/DatabaseContext";
 import { useProject } from "@/context/ProjectContext";
 import { DitherAvatar } from "../ui/hash-avatar";
-import { authFetch } from "@/lib/api";
 
 export default function Sidebar() {
   const { selectedDatabase, setSelectedDatabase, databases, refreshDatabases } =
     useDatabase();
   const { projects, refreshProjects } = useProject();
-  const { user, token, logout } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState<{
-    available: boolean;
-    currentHash: string;
-    remoteHash: string;
-    checkingStatus: boolean;
-    updatingStatus: boolean;
-  } | null>(null);
-
-  useEffect(() => {
-    const checkUpdates = async () => {
-      if (!token) return;
-      try {
-        const res = await authFetch(
-          "/api/system/update-status",
-          token,
-          {},
-          logout,
-        );
-        if (!res.ok) throw new Error("Status failed");
-        const data = await res.json();
-        setUpdateStatus(data);
-      } catch (e) {
-        console.error("Failed to check for updates");
-      }
-    };
-
-    checkUpdates();
-    const interval = setInterval(checkUpdates, 10 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [token]);
 
   useEffect(() => {
     const pathParts = location.pathname.split("/");
@@ -125,28 +93,6 @@ export default function Sidebar() {
     }
 
     return `/db/${nextDatabaseId}/dashboard`;
-  };
-
-  const handleUpdate = async () => {
-    if (
-      !confirm(
-        "Are you sure you want to update? The system will restart and the dashboard will be unavailable for a few seconds.",
-      )
-    )
-      return;
-
-    try {
-      const res = await authFetch(
-        "/api/system/update",
-        token,
-        { method: "POST" },
-        logout,
-      );
-      if (!res.ok) throw new Error("Update failed");
-      // No alert needed, the UI will show the updating state
-    } catch (e) {
-      alert("Failed to start update. Check backend logs.");
-    }
   };
 
   return (
@@ -494,7 +440,6 @@ export default function Sidebar() {
         )}
       </nav>
 
-      {/* Update Status Banner */}
       <div className="mt-auto pt-4 flex flex-col gap-4">
         {/* User Profile Section */}
         {user && (
@@ -531,26 +476,6 @@ export default function Sidebar() {
                 </p>
               </div>
             </Link>
-          </div>
-        )}
-
-        {updateStatus?.available && (
-          <div className="z-100 fixed bottom-5 right-5 bg-neutral-900 border border-border rounded-lg p-3 group animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-base font-medium">
-                New Version Available!
-              </span>
-            </div>
-            <p className="text-[11px] text-neutral-400 mb-3 leading-relaxed">
-              New features and improvements are ready. Update to the latest
-              version.
-            </p>
-            <button
-              onClick={handleUpdate}
-              className="w-full h-8 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 transition-all rounded-md text-xs font-medium text-white shadow-lg active:scale-95"
-            >
-              Update Now
-            </button>
           </div>
         )}
       </div>

@@ -1313,15 +1313,16 @@ func main() {
 
 			// Tokens and connection strings
 			tokenID, _ := auth.GenerateTokenID()
-			jwtToken, _ := auth.GenerateJWT(int(databaseID), 0, tokenID)
+			issuedAt := time.Now().UTC()
+			expiresAt := issuedAt.AddDate(2, 0, 0)
+			jwtToken, _ := auth.GenerateJWTWithTimestamps(int(databaseID), 0, tokenID, issuedAt, expiresAt)
 			tokenHash := db.HashToken(jwtToken)
-			expiresAt := time.Now().AddDate(2, 0, 0)
-			db.CreateToken(int(databaseID), tokenID, tokenHash, expiresAt)
+			db.CreateToken(int(databaseID), tokenID, tokenHash, issuedAt, expiresAt)
 
 			proxyHost := auth.GetProxyHost()
 			proxyPort := auth.GetProxyPort()
 			portInt, _ := strconv.Atoi(proxyPort)
-			connectionString := auth.GenerateConnectionString(jwtToken, int(databaseID), proxyHost, portInt, "disable")
+			connectionString := auth.GenerateConnectionString(jwtToken, int(databaseID), proxyHost, portInt, "require")
 
 			// Final success message with data
 			sendUpdate("success", "Database created successfully!", 100, gin.H{
@@ -1360,7 +1361,7 @@ func main() {
 		portInt, _ := strconv.Atoi(proxyPort)
 
 		// Return censored connection string (actual token not exposed)
-		connectionString := auth.GenerateConnectionString("***CENSORED***", db_id, proxyHost, portInt, "disable")
+		connectionString := auth.GenerateConnectionString("***CENSORED***", db_id, proxyHost, portInt, "require")
 
 		response := gin.H{
 			"id":                db_id,
@@ -2377,7 +2378,7 @@ func main() {
 		c.JSON(200, tokens)
 	})
 
-	// Rotate token for a database (creates new token, keeps old one active for overlap)
+	// Rotate token for a database (revokes old active tokens and issues a new one)
 	r.POST("/api/databases/:id/tokens/rotate", func(c *gin.Context) {
 		id := c.Param("id")
 		databaseID, err := strconv.Atoi(id)
@@ -2393,17 +2394,39 @@ func main() {
 			return
 		}
 
-		jwtToken, err := auth.GenerateJWT(databaseID, 0, tokenID)
+		issuedAt := time.Now().UTC()
+		expiresAt := issuedAt.AddDate(2, 0, 0)
+		jwtToken, err := auth.GenerateJWTWithTimestamps(databaseID, 0, tokenID, issuedAt, expiresAt)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to generate JWT token"})
 			return
 		}
 
-		// Store new token
+		// Rotate atomically: revoke old token(s), then store new token.
 		tokenHash := db.HashToken(jwtToken)
-		expiresAt := time.Now().AddDate(2, 0, 0)
-		if _, err := db.CreateToken(databaseID, tokenID, tokenHash, expiresAt); err != nil {
+		tx, err := db.DB.Begin()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to start token rotation"})
+			return
+		}
+		defer tx.Rollback()
+
+		if _, err := tx.Exec("UPDATE database_tokens SET revoked = 1 WHERE database_id = ? AND revoked = 0", databaseID); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to revoke old token"})
+			return
+		}
+		insertQuery := "INSERT INTO database_tokens (database_id, token_id, token_hash, expires_at) VALUES (?, ?, ?, ?)"
+		insertArgs := []interface{}{databaseID, tokenID, tokenHash, expiresAt}
+		if db.DatabaseTokensHasIssuedAt() {
+			insertQuery = "INSERT INTO database_tokens (database_id, token_id, token_hash, issued_at, expires_at) VALUES (?, ?, ?, ?, ?)"
+			insertArgs = []interface{}{databaseID, tokenID, tokenHash, issuedAt, expiresAt}
+		}
+		if _, err := tx.Exec(insertQuery, insertArgs...); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to store token"})
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to finalize token rotation"})
 			return
 		}
 
@@ -2411,7 +2434,7 @@ func main() {
 		proxyHost := auth.GetProxyHost()
 		proxyPort := auth.GetProxyPort()
 		portInt, _ := strconv.Atoi(proxyPort)
-		connectionString := auth.GenerateConnectionString(jwtToken, databaseID, proxyHost, portInt, "disable")
+		connectionString := auth.GenerateConnectionString(jwtToken, databaseID, proxyHost, portInt, "require")
 
 		c.JSON(200, gin.H{
 			"message":           "Token rotated successfully",
@@ -2442,24 +2465,19 @@ func main() {
 			return
 		}
 
-		// Get SSL mode from query parameter
-		sslMode := c.DefaultQuery("ssl", "disable")
-		// Handle "true" from frontend as "require"
-		if sslMode == "true" {
-			sslMode = "require"
-		} else if sslMode != "require" && sslMode != "disable" {
-			sslMode = "disable"
-		}
+		// TLS is mandatory for proxy connections.
+		sslMode := "require"
 
 		// Get existing active token
 		tokenRecord, err := db.GetActiveTokenForDatabase(dbID)
 		if err != nil || tokenRecord == nil {
 			// Generate new token if none exists
 			tokenID, _ := auth.GenerateTokenID()
-			jwtToken, _ := auth.GenerateJWT(dbID, 0, tokenID)
+			issuedAt := time.Now().UTC()
+			expiresAt := issuedAt.AddDate(2, 0, 0)
+			jwtToken, _ := auth.GenerateJWTWithTimestamps(dbID, 0, tokenID, issuedAt, expiresAt)
 			tokenHash := db.HashToken(jwtToken)
-			expiresAt := time.Now().AddDate(2, 0, 0)
-			db.CreateToken(dbID, tokenID, tokenHash, expiresAt)
+			db.CreateToken(dbID, tokenID, tokenHash, issuedAt, expiresAt)
 
 			proxyHost := auth.GetProxyHost()
 			if proxyHost == "localhost" || proxyHost == "0.0.0.0" {
@@ -2476,16 +2494,29 @@ func main() {
 				"connection_string": connectionString,
 				"expires_at":        expiresAt,
 				"warning":           "Copy this connection string now. You will not be able to see it again. Store it securely.",
-				"ssl_enabled":       sslMode == "require",
+				"ssl_enabled":       true,
 			})
 			return
 		}
 
-		// Generate JWT for existing token
-		jwtToken, err := auth.GenerateJWT(dbID, 0, tokenRecord.TokenID)
+		// Generate deterministic JWT for existing token record.
+		jwtToken, err := auth.GenerateJWTWithTimestamps(dbID, 0, tokenRecord.TokenID, tokenRecord.IssuedAt, tokenRecord.ExpiresAt)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to generate connection string"})
 			return
+		}
+		if db.HashToken(jwtToken) != tokenRecord.TokenHash {
+			// Legacy token record without reproducible JWT claims; mint a new stable token.
+			tokenID, _ := auth.GenerateTokenID()
+			issuedAt := time.Now().UTC()
+			expiresAt := issuedAt.AddDate(2, 0, 0)
+			jwtToken, _ = auth.GenerateJWTWithTimestamps(dbID, 0, tokenID, issuedAt, expiresAt)
+			tokenHash := db.HashToken(jwtToken)
+			if _, err := db.CreateToken(dbID, tokenID, tokenHash, issuedAt, expiresAt); err != nil {
+				c.JSON(500, gin.H{"error": "Failed to migrate token format"})
+				return
+			}
+			tokenRecord.ExpiresAt = expiresAt
 		}
 
 		proxyHost := auth.GetProxyHost()

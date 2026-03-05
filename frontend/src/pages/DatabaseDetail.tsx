@@ -219,9 +219,10 @@ export default function DatabaseDetail() {
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [connectionString, setConnectionString] = useState("");
   const [connectionWarning, setConnectionWarning] = useState("");
+  const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
 
   const [connectionLoading, setConnectionLoading] = useState(false);
-  const [useSSL, setUseSSL] = useState(true);
+  const [rotatingToken, setRotatingToken] = useState(false);
   const [useDomain, setUseDomain] = useState(false);
 
   const currentHostname = window.location.hostname;
@@ -298,7 +299,7 @@ export default function DatabaseDetail() {
     setConnectionLoading(true);
     try {
       const res = await authFetch(
-        `/api/databases/${id}/connection-string?ssl=${useSSL}`,
+        `/api/databases/${id}/connection-string`,
         token,
         {},
         logout,
@@ -307,6 +308,7 @@ export default function DatabaseDetail() {
         const data = await res.json();
         setConnectionString(data.connection_string);
         setConnectionWarning(data.warning || "");
+        setTokenExpiresAt(data.expires_at || null);
       }
     } catch (err: unknown) {
       console.error("Failed to fetch connection string:", err);
@@ -318,6 +320,40 @@ export default function DatabaseDetail() {
   const handleOpenConnectionDialog = async () => {
     setConnectionDialogOpen(true);
     await fetchConnectionString();
+  };
+
+  const rotateConnectionToken = async () => {
+    if (
+      !confirm(
+        "Rotate access token? Existing connection strings will stop working immediately.",
+      )
+    ) {
+      return;
+    }
+
+    setRotatingToken(true);
+    try {
+      const res = await authFetch(
+        `/api/databases/${id}/tokens/rotate`,
+        token,
+        { method: "POST" },
+        logout,
+      );
+      if (!res.ok) {
+        throw new Error("Failed to rotate token");
+      }
+
+      const data = await res.json();
+      setConnectionString(data.connection_string || "");
+      setTokenExpiresAt(data.expires_at || null);
+      setConnectionWarning(
+        "Token rotated. Previous connection strings were revoked immediately.",
+      );
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to rotate token");
+    } finally {
+      setRotatingToken(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -348,6 +384,32 @@ export default function DatabaseDetail() {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
+
+  const tokenExpiryInfo = useMemo(() => {
+    if (!tokenExpiresAt) return null;
+
+    const expiryDate = new Date(tokenExpiresAt);
+    if (Number.isNaN(expiryDate.getTime())) return null;
+
+    const msLeft = expiryDate.getTime() - Date.now();
+    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+    const isExpired = msLeft <= 0;
+    const isNearExpiry = !isExpired && daysLeft <= 30;
+
+    const exact = expiryDate.toLocaleString();
+    let relative = "";
+    if (isExpired) {
+      relative = "expired";
+    } else if (daysLeft >= 365) {
+      relative = `in ${Math.floor(daysLeft / 365)} year(s)`;
+    } else if (daysLeft >= 30) {
+      relative = `in ${Math.floor(daysLeft / 30)} month(s)`;
+    } else {
+      relative = `in ${daysLeft} day(s)`;
+    }
+
+    return { exact, relative, isExpired, isNearExpiry };
+  }, [tokenExpiresAt]);
 
   if (!metricsEnabled) {
     return (
@@ -472,118 +534,123 @@ export default function DatabaseDetail() {
                   Connect
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl bg-card">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    Connection String
+              <DialogContent className="max-w-2xl p-0 gap-0! bg-card">
+                <DialogHeader className="border-b border-border p-4 mb-0! gap-0">
+                  <DialogTitle className="text-xl font-medium">
+                    Database Connection
                   </DialogTitle>
                 </DialogHeader>
-                <div className="mt-4">
-                  {canUseDomain && (
-                    <>
-                      <div className="flex items-center justify-between mb-4 p-3 bg-neutral-800/50 rounded-lg border border-border">
-                        <div className="flex items-center gap-3">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium text-neutral-200">
-                              Use Domain Name
-                            </span>
-                            <span className="text-xs text-neutral-500">
-                              Connect via {currentHostname} instead of IP
-                            </span>
-                          </div>
+
+                <div className="p-4">
+                  <div className="space-y-6">
+                    {/* Domain Toggle - Minimalist layout without wrapping borders */}
+                    {canUseDomain && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-medium text-neutral-200">
+                            Use Custom Domain
+                          </span>
+                          <span className="text-sm text-neutral-500">
+                            Connect via {currentHostname} instead of raw IP
+                            address.
+                          </span>
                         </div>
                         <button
                           onClick={() => setUseDomain(!useDomain)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                            useDomain ? "bg-blue-600" : "bg-neutral-600"
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
+                            useDomain ? "bg-foreground" : "bg-muted"
                           }`}
                         >
                           <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              useDomain ? "translate-x-6" : "translate-x-1"
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow ring-0 transition duration-200 ease-in-out ${
+                              useDomain
+                                ? "translate-x-4 bg-card"
+                                : "translate-x-0 bg-muted-foreground"
                             }`}
                           />
                         </button>
                       </div>
-                    </>
-                  )}
+                    )}
 
-                  <div className="flex items-center justify-between mb-4 p-3 bg-neutral-800/50 rounded-lg border border-border">
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-neutral-200">
-                          SSL/TLS Encryption
-                        </span>
-                        <span className="text-xs text-neutral-500">
-                          {useDomain
-                            ? "Encrypted connection via domain certificate"
-                            : "Use encrypted connection to the database"}
-                        </span>
+                    {connectionLoading ? (
+                      <div className="py-6 text-sm text-neutral-500 animate-pulse">
+                        Retrieving connection string...
                       </div>
-                    </div>
-                    <button
-                      onClick={() => setUseSSL(!useSSL)}
-                      disabled={useDomain}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        useSSL || useDomain ? "bg-green-600" : "bg-neutral-600"
-                      } ${useDomain ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          useSSL || useDomain
-                            ? "translate-x-6"
-                            : "translate-x-1"
-                        }`}
-                      />
-                    </button>
+                    ) : displayConnectionString ? (
+                      <div className="space-y-0">
+                        {/* Connection String Label & Expiry */}
+                        <div className="flex items-center justify-between rounded-t-md border border-border bg-muted px-3 py-1.5">
+                          <label className="text-sm font-medium text-neutral-300">
+                            Connection string
+                          </label>
+                          <div className="flex items-center overflow-hidden rounded-md border border-border bg-muted/20">
+                            {tokenExpiryInfo && (
+                              <span
+                                className={`px-2 py-1 text-xs ${
+                                  tokenExpiryInfo.isExpired
+                                    ? "text-red-400"
+                                    : tokenExpiryInfo.isNearExpiry
+                                      ? "text-amber-400/90"
+                                      : "text-neutral-400"
+                                }`}
+                              >
+                                Expires {tokenExpiryInfo.exact}
+                              </span>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={`h-6 rounded-none px-2 text-xs ${
+                                tokenExpiryInfo ? "border-l border-border" : ""
+                              }`}
+                              onClick={rotateConnectionToken}
+                              disabled={rotatingToken || connectionLoading}
+                            >
+                              {rotatingToken ? "..." : "Rotate"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Core Input Block - The Focus is here */}
+                        <div className="group relative flex items-center overflow-hidden rounded-b-md border border-border border-t-0 bg-card transition-colors focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
+                          <input
+                            readOnly
+                            className="w-full bg-transparent px-3 py-2.5 text-sm font-mono text-foreground outline-none selection:bg-muted placeholder:text-muted-foreground"
+                            value={displayConnectionString}
+                          />
+                          {/* Seamless copy button inside the input container */}
+                          <div className="flex bg-card pr-1.5">
+                            <button
+                              onClick={() =>
+                                copyToClipboard(displayConnectionString)
+                              }
+                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground flex-shrink-0"
+                              title="Copy to clipboard"
+                            >
+                              {copied ? (
+                                <CheckIcon
+                                  size={16}
+                                  className="text-foreground"
+                                />
+                              ) : (
+                                <CopyIcon size={16} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                        No connection string available
+                      </div>
+                    )}
+
+                    <p className="text-xs text-muted-foreground">
+                      Keep this connection string secure. Do not share it in
+                      public repos, chats, or client-side code. Rotate the token
+                      immediately if you think it was exposed.
+                    </p>
                   </div>
-
-                  {connectionLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="text-neutral-400">
-                        Loading connection string...
-                      </div>
-                    </div>
-                  ) : displayConnectionString ? (
-                    <div className="bg-neutral-900 rounded-md p-4 border border-border">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-mono text-neutral-500 uppercase">
-                          Connection String {useSSL && "(SSL)"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          readOnly
-                          className="flex-1 text-sm font-mono break-all"
-                          value={displayConnectionString}
-                        />
-
-                        <button
-                          onClick={() =>
-                            copyToClipboard(displayConnectionString)
-                          }
-                          className="p-2 hover:bg-neutral-800 rounded-md transition-colors text-neutral-400 hover:text-neutral-200 flex-shrink-0"
-                          title="Copy to clipboard"
-                        >
-                          {copied ? (
-                            <CheckIcon size={20} className="text-green-500" />
-                          ) : (
-                            <CopyIcon size={20} />
-                          )}
-                        </button>
-                      </div>
-                      <div className="text-amber-400 text-sm flex items-start gap-2 bg-amber-500/10 p-3 rounded-md border border-amber-500/20">
-                        <span>
-                          {connectionWarning ||
-                            "Copy this connection string now. You will not be able to see it again. Store it securely."}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-neutral-400">
-                      No connection string available
-                    </div>
-                  )}
                 </div>
               </DialogContent>
             </Dialog>

@@ -5,6 +5,7 @@ import {
   CaretDown,
   CaretUp,
   CaretUpDown,
+  ArrowClockwise,
   X,
 } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
@@ -26,6 +27,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 interface TableInfo {
   name: string;
@@ -364,6 +366,21 @@ export default function Tables() {
     }
   };
 
+  const handleRefresh = () => {
+    if (!selectedTableName) return;
+
+    fetchTableData(
+      selectedTableName,
+      currentPage,
+      rowsPerPage,
+      filterCol,
+      filterOp,
+      filterVal,
+      sortBy,
+      sortOrder,
+    );
+  };
+
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
@@ -530,24 +547,40 @@ export default function Tables() {
                           : ""}
                       </p>
                     </div>
-                    {hasChanges && (
-                      <div className="flex flex-row items-center gap-2">
-                        <button
-                          onClick={handleDiscard}
-                          className="px-3 py-1.5 text-sm font-medium text-neutral-300 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
-                          disabled={isSaving}
-                        >
-                          Discard
-                        </button>
-                        <button
-                          onClick={handleSave}
-                          className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded transition-colors"
-                          disabled={isSaving}
-                        >
-                          {isSaving ? "Saving..." : "Save Changes"}
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex flex-row items-center gap-2">
+                      <Button
+                        onClick={handleRefresh}
+                        disabled={tableLoading}
+                        size={"sm"}
+                        variant={"secondary"}
+                      >
+                        <ArrowClockwise
+                          size={14}
+                          className={tableLoading ? "animate-spin" : ""}
+                        />
+                        Refresh
+                      </Button>
+                      {hasChanges && (
+                        <>
+                          <Button
+                            onClick={handleDiscard}
+                            disabled={isSaving}
+                            size={"sm"}
+                            variant={"secondary"}
+                          >
+                            Discard
+                          </Button>
+                          <Button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            size={"sm"}
+                            variant={"default"}
+                          >
+                            {isSaving ? "Saving..." : "Save Changes"}
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Filter UI */}

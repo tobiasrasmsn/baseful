@@ -713,18 +713,22 @@ export default function Backup() {
                     <label className="text-xs font-medium text-neutral-400">
                       Provider
                     </label>
-                    <select
-                      className="w-full bg-neutral-900 border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    <Select
                       value={settingsForm.provider}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         setSettingsForm({
                           ...settingsForm,
-                          provider: e.target.value,
+                          provider: value,
                         })
                       }
                     >
-                      <option value="s3">S3 Compatible Storage</option>
-                    </select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="s3">S3 Compatible Storage</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-neutral-400">
@@ -1211,34 +1215,34 @@ gpg --decrypt backup.sql.gpg > backup.sql`}
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
+        <DialogContent className="p-0 gap-0! bg-card max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="border-b border-border p-4 mb-0! gap-0">
+            <DialogTitle className="text-xl font-medium">
               {decryptMode === "download"
                 ? "Decrypt & Download Backup"
                 : "Decrypt & Restore Backup"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-neutral-400">
               Provide the private key for this encrypted backup. The key is used
               only for this action and is not stored.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="p-4 space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-neutral-400">
+              <label className="text-neutral-400 uppercase tracking-wider text-xs font-medium">
                 Private Key (ASCII-armored OpenPGP)
               </label>
               <Textarea
                 value={privateKeyInput}
                 onChange={(e) => setPrivateKeyInput(e.target.value)}
                 placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----"
-                className="min-h-36 max-h-[40vh] overflow-y-auto font-mono text-xs"
+                className="min-h-36 max-h-[28vh] overflow-y-auto font-mono text-xs bg-background"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-medium text-neutral-400">
+              <label className="text-neutral-400 uppercase tracking-wider text-xs font-medium">
                 Passphrase (if your key has one)
               </label>
               <Input
@@ -1246,11 +1250,12 @@ gpg --decrypt backup.sql.gpg > backup.sql`}
                 value={passphraseInput}
                 onChange={(e) => setPassphraseInput(e.target.value)}
                 placeholder="Optional passphrase"
+                className="w-full"
               />
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="border-t border-border p-4 mt-0">
             <Button
               variant="outline"
               onClick={() => setDecryptDialogOpen(false)}

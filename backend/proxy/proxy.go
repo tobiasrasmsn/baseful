@@ -303,11 +303,19 @@ func (p *ProxyServer) handleConnection(frontend net.Conn) {
 		p.sendError(frontend, "28000", "Invalid or expired JWT token")
 		return
 	}
+	if claims.Purpose != "db_proxy" {
+		p.sendError(frontend, "28000", "Invalid token purpose")
+		return
+	}
 
 	// Check if token has been revoked
 	if err := p.checkTokenRevocation(claims.TokenID); err != nil {
 		p.logger.TokenRevoked(claims.TokenID, clientIP)
 		p.sendError(frontend, "28000", "Token has been revoked")
+		return
+	}
+	if err := p.checkTokenActive(claims, jwtToken); err != nil {
+		p.sendError(frontend, "28000", "Invalid or revoked JWT token")
 		return
 	}
 
@@ -403,39 +411,38 @@ func (p *ProxyServer) handleFrontendHandshake(conn net.Conn) (net.Conn, map[stri
 	}
 	length := binary.BigEndian.Uint32(lenBuf)
 
-	// Handle SSL Request
-	if length == 8 {
-		codeBuf := make([]byte, 4)
-		if _, err := io.ReadFull(conn, codeBuf); err != nil {
-			return conn, nil, "", err
-		}
-		if binary.BigEndian.Uint32(codeBuf) == 80877103 {
-			if p.tlsConfig != nil {
-				// Accept SSL
-				if _, err := conn.Write([]byte{'S'}); err != nil {
-					return conn, nil, "", err
-				}
-				tlsConn := tls.Server(conn, p.tlsConfig)
-				if err := tlsConn.Handshake(); err != nil {
-					return conn, nil, "", fmt.Errorf("TLS handshake failed: %v", err)
-				}
-				// After SSL handshake, the client sends the actual StartupMessage
-				conn = tlsConn
-				if _, err := io.ReadFull(conn, lenBuf); err != nil {
-					return conn, nil, "", err
-				}
-				length = binary.BigEndian.Uint32(lenBuf)
-			} else {
-				// Reject SSL
-				conn.Write([]byte{'N'})
-				// After rejecting SSL, the client sends the StartupMessage unencrypted
-				if _, err := io.ReadFull(conn, lenBuf); err != nil {
-					return conn, nil, "", err
-				}
-				length = binary.BigEndian.Uint32(lenBuf)
-			}
-		}
+	// TLS is mandatory: client must send SSLRequest first.
+	if length != 8 {
+		p.sendError(conn, "28000", "TLS is required. Configure your client with sslmode=require")
+		return conn, nil, "", fmt.Errorf("plaintext startup rejected: TLS is required")
 	}
+
+	codeBuf := make([]byte, 4)
+	if _, err := io.ReadFull(conn, codeBuf); err != nil {
+		return conn, nil, "", err
+	}
+	if binary.BigEndian.Uint32(codeBuf) != 80877103 {
+		p.sendError(conn, "28000", "TLS is required. Configure your client with sslmode=require")
+		return conn, nil, "", fmt.Errorf("non-SSL startup rejected: TLS is required")
+	}
+	if p.tlsConfig == nil {
+		p.sendError(conn, "08006", "Proxy TLS is not configured")
+		return conn, nil, "", fmt.Errorf("proxy TLS config missing")
+	}
+
+	// Accept SSL upgrade and continue with encrypted startup.
+	if _, err := conn.Write([]byte{'S'}); err != nil {
+		return conn, nil, "", err
+	}
+	tlsConn := tls.Server(conn, p.tlsConfig)
+	if err := tlsConn.Handshake(); err != nil {
+		return conn, nil, "", fmt.Errorf("TLS handshake failed: %v", err)
+	}
+	conn = tlsConn
+	if _, err := io.ReadFull(conn, lenBuf); err != nil {
+		return conn, nil, "", err
+	}
+	length = binary.BigEndian.Uint32(lenBuf)
 
 	// Read StartupMessage
 	payload := make([]byte, length-4)
@@ -613,6 +620,27 @@ func (p *ProxyServer) checkTokenRevocation(tokenID string) error {
 		return fmt.Errorf("token %s has been revoked", tokenID)
 	}
 
+	return nil
+}
+
+// checkTokenActive verifies token state against persistent storage and exact token hash.
+func (p *ProxyServer) checkTokenActive(claims *auth.JWTClaims, rawToken string) error {
+	tokenRecord, err := db.GetTokenByID(claims.TokenID)
+	if err != nil {
+		return fmt.Errorf("token lookup failed: %w", err)
+	}
+	if tokenRecord.DatabaseID != claims.DatabaseID {
+		return fmt.Errorf("token/database mismatch")
+	}
+	if tokenRecord.Revoked {
+		return fmt.Errorf("token revoked")
+	}
+	if tokenRecord.ExpiresAt.Before(time.Now()) {
+		return fmt.Errorf("token expired")
+	}
+	if tokenRecord.TokenHash != db.HashToken(rawToken) {
+		return fmt.Errorf("token hash mismatch")
+	}
 	return nil
 }
 

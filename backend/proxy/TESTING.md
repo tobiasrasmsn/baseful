@@ -130,11 +130,11 @@ SELECT * FROM test_table;
 DROP TABLE test_table;
 ```
 
-### Test with SSL Disabled
+### Test with TLS Required
 
 ```bash
-# Explicitly disable SSL (proxy doesn't support SSL)
-psql "postgresql://token:YOUR_JWT_TOKEN@localhost:6432/db_1?sslmode=disable"
+# Explicitly require TLS
+psql "postgresql://token:YOUR_JWT_TOKEN@localhost:6432/db_1?sslmode=require"
 
 # Or use command-line options
 psql -h localhost -p 6432 -U token -d db_1
@@ -240,10 +240,10 @@ cd cmd/test_ssl
 # ========================================
 #
 # Test 1: Client with SSL negotiation
-# ✅ SSL negotiation handled correctly (server responded with 'N')
+# ✅ SSL negotiation handled correctly (server responded with 'S')
 #
 # Test 2: Client without SSL negotiation
-# ✅ Direct startup message handled correctly (received error response)
+# ✅ Direct startup message rejected (TLS required)
 #
 # All tests completed!
 ```
@@ -251,12 +251,12 @@ cd cmd/test_ssl
 ### Manual SSL Test
 
 ```bash
-# Connect with SSL (should be rejected by proxy)
+# Connect with SSL (should succeed)
 psql "postgresql://token:YOUR_JWT_TOKEN@localhost:6432/db_1?sslmode=require"
 
 # Expected behavior:
-# - Proxy responds with 'N' (no SSL support)
-# - Client falls back to non-SSL connection
+# - Proxy responds with 'S' (TLS required)
+# - TLS handshake completes
 # - Connection succeeds
 ```
 
@@ -441,8 +441,8 @@ curl -X POST http://localhost:8080/api/databases/1/token
 **Solutions:**
 
 ```bash
-# Disable SSL explicitly
-psql "postgresql://token:YOUR_JWT_TOKEN@localhost:6432/db_1?sslmode=disable"
+# Require SSL explicitly
+psql "postgresql://token:YOUR_JWT_TOKEN@localhost:6432/db_1?sslmode=require"
 
 # Or use -c flag
 psql -h localhost -p 6432 -U token -d db_1 -c "SELECT version();"

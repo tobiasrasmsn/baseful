@@ -9,7 +9,8 @@ import (
 
 func main() {
 	fmt.Println("Testing PostgreSQL Proxy SSL Negotiation")
-	fmt.Println("========================================\n")
+	fmt.Println("========================================")
+	fmt.Println()
 
 	// Test 1: SSL negotiation
 	fmt.Println("Test 1: Client with SSL negotiation")
@@ -42,7 +43,7 @@ func testSSLNegotiation() {
 		return
 	}
 
-	// Read response (should be 'N' for no SSL)
+	// Read response (should be 'S' to accept SSL)
 	response := make([]byte, 1)
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, err = conn.Read(response)
@@ -51,8 +52,8 @@ func testSSLNegotiation() {
 		return
 	}
 
-	if response[0] == 'N' {
-		fmt.Println("✅ SSL negotiation handled correctly (server responded with 'N')")
+	if response[0] == 'S' {
+		fmt.Println("✅ SSL negotiation handled correctly (server responded with 'S')")
 	} else {
 		fmt.Printf("❌ Unexpected SSL response: %c (0x%02x)\n", response[0], response[0])
 	}
@@ -86,11 +87,11 @@ func testDirectStartup() {
 	}
 
 	if n > 0 {
-		// Check if we got an error response (expected for invalid credentials)
-		if response[4] == 'E' {
-			fmt.Println("✅ Direct startup message handled correctly (received error response)")
+		// Check if we got an error response (expected when TLS is required)
+		if response[0] == 'E' {
+			fmt.Println("✅ Direct startup message rejected as expected (TLS required)")
 		} else {
-			fmt.Printf("✅ Direct startup message handled correctly (received %d bytes)\n", n)
+			fmt.Printf("❌ Unexpected response for non-SSL startup (received %d bytes)\n", n)
 		}
 	} else {
 		fmt.Println("❌ No response received")

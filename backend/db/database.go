@@ -87,6 +87,7 @@ func InitDB() error {
         database_id INTEGER NOT NULL,
         token_id TEXT NOT NULL,
         token_hash TEXT NOT NULL,
+        issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         revoked BOOLEAN DEFAULT 0,
@@ -193,6 +194,10 @@ func InitDB() error {
 
 	// Migration: Add mapped_port for local dev access (running proxy on host)
 	DB.Exec("ALTER TABLE databases ADD COLUMN mapped_port INTEGER DEFAULT 0")
+
+	// Migration: Persist JWT issue timestamps so connection strings remain stable
+	DB.Exec("ALTER TABLE database_tokens ADD COLUMN issued_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+	DB.Exec("UPDATE database_tokens SET issued_at = COALESCE(issued_at, created_at)")
 
 	// Migration: Ensure users and whitelisted_emails tables exist (redundant but safe)
 	DB.Exec(`CREATE TABLE IF NOT EXISTS users (

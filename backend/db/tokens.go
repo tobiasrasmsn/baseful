@@ -2,6 +2,7 @@ package db
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -13,6 +14,7 @@ type TokenRecord struct {
 	DatabaseID int
 	TokenID    string
 	TokenHash  string
+	IssuedAt   time.Time
 	ExpiresAt  time.Time
 	CreatedAt  time.Time
 	Revoked    bool
@@ -27,6 +29,31 @@ type TokenInfo struct {
 	Revoked   bool      `json:"revoked"`
 }
 
+// DatabaseTokensHasIssuedAt returns true when the migration has added issued_at.
+func DatabaseTokensHasIssuedAt() bool {
+	rows, err := DB.Query("PRAGMA table_info(database_tokens)")
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var colType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
+			return false
+		}
+		if name == "issued_at" {
+			return true
+		}
+	}
+	return false
+}
+
 // HashToken creates a SHA256 hash of the token for storage
 func HashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
@@ -34,11 +61,20 @@ func HashToken(token string) string {
 }
 
 // CreateToken creates a new token record for a database
-func CreateToken(databaseID int, tokenID string, tokenHash string, expiresAt time.Time) (int, error) {
-	result, err := DB.Exec(
-		"INSERT INTO database_tokens (database_id, token_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
-		databaseID, tokenID, tokenHash, expiresAt,
-	)
+func CreateToken(databaseID int, tokenID string, tokenHash string, issuedAt time.Time, expiresAt time.Time) (int, error) {
+	var result sql.Result
+	var err error
+	if DatabaseTokensHasIssuedAt() {
+		result, err = DB.Exec(
+			"INSERT INTO database_tokens (database_id, token_id, token_hash, issued_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+			databaseID, tokenID, tokenHash, issuedAt, expiresAt,
+		)
+	} else {
+		result, err = DB.Exec(
+			"INSERT INTO database_tokens (database_id, token_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+			databaseID, tokenID, tokenHash, expiresAt,
+		)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("failed to create token: %w", err)
 	}
@@ -54,16 +90,31 @@ func CreateToken(databaseID int, tokenID string, tokenHash string, expiresAt tim
 // GetActiveTokenForDatabase returns the active (non-revoked) token for a database
 func GetActiveTokenForDatabase(databaseID int) (*TokenRecord, error) {
 	var token TokenRecord
-	err := DB.QueryRow(`
-		SELECT id, database_id, token_id, token_hash, expires_at, created_at, revoked
-		FROM database_tokens
-		WHERE database_id = ? AND revoked = 0 AND expires_at > datetime('now')
-		ORDER BY created_at DESC
-		LIMIT 1
-	`, databaseID).Scan(
-		&token.ID, &token.DatabaseID, &token.TokenID,
-		&token.TokenHash, &token.ExpiresAt, &token.CreatedAt, &token.Revoked,
-	)
+	var err error
+	if DatabaseTokensHasIssuedAt() {
+		err = DB.QueryRow(`
+			SELECT id, database_id, token_id, token_hash, issued_at, expires_at, created_at, revoked
+			FROM database_tokens
+			WHERE database_id = ? AND revoked = 0 AND expires_at > datetime('now')
+			ORDER BY created_at DESC
+			LIMIT 1
+		`, databaseID).Scan(
+			&token.ID, &token.DatabaseID, &token.TokenID,
+			&token.TokenHash, &token.IssuedAt, &token.ExpiresAt, &token.CreatedAt, &token.Revoked,
+		)
+	} else {
+		err = DB.QueryRow(`
+			SELECT id, database_id, token_id, token_hash, expires_at, created_at, revoked
+			FROM database_tokens
+			WHERE database_id = ? AND revoked = 0 AND expires_at > datetime('now')
+			ORDER BY created_at DESC
+			LIMIT 1
+		`, databaseID).Scan(
+			&token.ID, &token.DatabaseID, &token.TokenID,
+			&token.TokenHash, &token.ExpiresAt, &token.CreatedAt, &token.Revoked,
+		)
+		token.IssuedAt = token.CreatedAt
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("no active token found: %w", err)
@@ -75,14 +126,27 @@ func GetActiveTokenForDatabase(databaseID int) (*TokenRecord, error) {
 // GetTokenByID returns a token record by ID
 func GetTokenByID(tokenID string) (*TokenRecord, error) {
 	var token TokenRecord
-	err := DB.QueryRow(`
-		SELECT id, database_id, token_id, token_hash, expires_at, created_at, revoked
-		FROM database_tokens
-		WHERE token_id = ?
-	`, tokenID).Scan(
-		&token.ID, &token.DatabaseID, &token.TokenID,
-		&token.TokenHash, &token.ExpiresAt, &token.CreatedAt, &token.Revoked,
-	)
+	var err error
+	if DatabaseTokensHasIssuedAt() {
+		err = DB.QueryRow(`
+			SELECT id, database_id, token_id, token_hash, issued_at, expires_at, created_at, revoked
+			FROM database_tokens
+			WHERE token_id = ?
+		`, tokenID).Scan(
+			&token.ID, &token.DatabaseID, &token.TokenID,
+			&token.TokenHash, &token.IssuedAt, &token.ExpiresAt, &token.CreatedAt, &token.Revoked,
+		)
+	} else {
+		err = DB.QueryRow(`
+			SELECT id, database_id, token_id, token_hash, expires_at, created_at, revoked
+			FROM database_tokens
+			WHERE token_id = ?
+		`, tokenID).Scan(
+			&token.ID, &token.DatabaseID, &token.TokenID,
+			&token.TokenHash, &token.ExpiresAt, &token.CreatedAt, &token.Revoked,
+		)
+		token.IssuedAt = token.CreatedAt
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("token not found: %w", err)

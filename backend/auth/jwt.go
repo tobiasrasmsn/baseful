@@ -58,10 +58,16 @@ func GenerateTokenID() (string, error) {
 
 // GenerateJWT generates a new JWT token for a database (Legacy proxy token)
 func GenerateJWT(databaseID int, userID int, tokenID string) (string, error) {
-	secret := GetJWTSecret()
+	issuedAt := time.Now().UTC()
+	expiresAt := issuedAt.AddDate(2, 0, 0)
+	return GenerateJWTWithTimestamps(databaseID, userID, tokenID, issuedAt, expiresAt)
+}
 
-	// Token expires in 2 years
-	expiresAt := time.Now().AddDate(2, 0, 0)
+// GenerateJWTWithTimestamps generates a deterministic JWT for a token identity and timestamp pair.
+func GenerateJWTWithTimestamps(databaseID int, userID int, tokenID string, issuedAt time.Time, expiresAt time.Time) (string, error) {
+	secret := GetJWTSecret()
+	issuedAt = issuedAt.UTC()
+	expiresAt = expiresAt.UTC()
 
 	claims := JWTClaims{
 		DatabaseID: databaseID,
@@ -71,8 +77,8 @@ func GenerateJWT(databaseID int, userID int, tokenID string) (string, error) {
 		Type:       "database_access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(issuedAt),
+			NotBefore: jwt.NewNumericDate(issuedAt),
 			Issuer:    "baseful",
 			Subject:   fmt.Sprintf("db_%d", databaseID),
 		},
@@ -134,10 +140,11 @@ func GenerateConnectionString(jwtToken string, databaseID int, host string, port
 	// Format: postgresql://token:JWT@host:port/db_DATABASEID
 	connStr := fmt.Sprintf("postgresql://token:%s@%s:%d/db_%d", jwtToken, host, port, databaseID)
 
-	// Add SSL mode if specified
-	if sslMode != "" && sslMode != "disable" {
-		connStr = fmt.Sprintf("%s?sslmode=%s", connStr, sslMode)
+	// TLS is mandatory for proxy connections.
+	if sslMode == "" || sslMode == "disable" {
+		sslMode = "require"
 	}
+	connStr = fmt.Sprintf("%s?sslmode=%s", connStr, sslMode)
 
 	return connStr
 }
