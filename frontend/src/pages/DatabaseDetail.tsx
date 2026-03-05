@@ -218,7 +218,7 @@ export default function DatabaseDetail() {
   const [copied, setCopied] = useState(false);
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [connectionString, setConnectionString] = useState("");
-  const [connectionWarning, setConnectionWarning] = useState("");
+  const [, setConnectionWarning] = useState("");
   const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
 
   const [connectionLoading, setConnectionLoading] = useState(false);
