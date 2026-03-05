@@ -198,7 +198,10 @@ export default function Backup() {
       enabled: !!value.enabled,
     });
 
-    return JSON.stringify(normalize(settingsForm)) !== JSON.stringify(normalize(settings));
+    return (
+      JSON.stringify(normalize(settingsForm)) !==
+      JSON.stringify(normalize(settings))
+    );
   }, [settings, settingsForm]);
 
   const rollbackMutation = useMutation({
@@ -233,6 +236,11 @@ export default function Backup() {
   const [activeSection, setActiveSection] = useState<BackupSection>("overview");
   const [connectionString, setConnectionString] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sectionLabel: Record<BackupSection, string> = {
+    overview: "Recent Backups",
+    settings: "Settings",
+    external: "External Restore",
+  };
 
   const restoreFromFileMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -374,7 +382,9 @@ export default function Backup() {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || "Failed to start restore");
         }
-        alert("Restore started. Database will be unavailable during restoration.");
+        alert(
+          "Restore started. Database will be unavailable during restoration.",
+        );
       }
 
       setDecryptDialogOpen(false);
@@ -399,13 +409,13 @@ export default function Backup() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
-        return "text-blue-500";
+        return "text-blue-400 bg-blue-500/20 px-1.5 py-1 rounded";
       case "pending":
-        return "text-amber-400";
+        return "text-amber-400 bg-amber-500/20 px-1.5 py-1 rounded";
       case "failed":
-        return "text-red-400";
+        return "text-red-400 bg-red-500/20 px-1.5 py-1 rounded";
       default:
-        return "text-neutral-400";
+        return "text-neutral-400 bg-neutral-500/20 px-1.5 py-1 rounded";
     }
   };
 
@@ -421,20 +431,13 @@ export default function Backup() {
     <TableRow className="hover:bg-neutral-800/40 border-0">
       <TableCell className="border-b border-r border-border align-middle py-1.5">
         <span
-          className={`text-xs font-medium capitalize ${getStatusColor(
+          className={`text-xs cursor-default font-medium capitalize ${getStatusColor(
             backup.status,
           )}`}
+          title={backup.error ? `${backup.error}` : backup.status}
         >
           {backup.status}
         </span>
-        {backup.error && (
-          <div
-            className="text-[10px] text-red-400 mt-0.5 max-w-[200px] truncate"
-            title={backup.error}
-          >
-            {backup.error}
-          </div>
-        )}
       </TableCell>
       <TableCell className="font-mono text-xs border-b border-r border-border align-middle py-1.5">
         {backup.filename}
@@ -448,9 +451,7 @@ export default function Backup() {
       <TableCell className="border-b border-border align-middle py-1.5 text-right">
         <div
           className={`grid w-full gap-2 ${
-            backup.status === "completed"
-              ? "grid-cols-2"
-              : "grid-cols-1"
+            backup.status === "completed" ? "grid-cols-2" : "grid-cols-1"
           }`}
         >
           {backup.is_encrypted && backup.status === "completed" ? (
@@ -516,23 +517,6 @@ export default function Backup() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="md:hidden w-36">
-            <Select
-              value={activeSection}
-              onValueChange={(value) =>
-                setActiveSection(value as BackupSection)
-              }
-            >
-              <SelectTrigger size="sm" className="w-full text-xs">
-                <SelectValue placeholder="Select section" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="overview">Overview</SelectItem>
-                <SelectItem value="settings">Settings</SelectItem>
-                <SelectItem value="external">External Restore</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           {!settingsForm.enabled && (
             <div className="hidden sm:flex text-amber-500 text-xs bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 items-center gap-1">
               <WarningIcon />
@@ -587,26 +571,50 @@ export default function Backup() {
         </div>
 
         <div className="flex-1 flex flex-col min-h-0 md:border-l border-border overflow-y-auto">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <h2 className="hidden md:block text-xl md:text-2xl font-medium text-neutral-200">
+              {sectionLabel[activeSection]}
+            </h2>
+            <div className="md:hidden">
+              <Select
+                value={activeSection}
+                onValueChange={(value) =>
+                  setActiveSection(value as BackupSection)
+                }
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="h-auto w-auto !border-0 !bg-transparent dark:!bg-transparent hover:!bg-transparent dark:hover:!bg-transparent active:!bg-transparent data-[state=open]:!bg-transparent !p-0 text-xl font-medium text-neutral-200 !shadow-none !ring-0 !ring-offset-0 !outline-none focus:!ring-0 focus-visible:!ring-0 focus-visible:!border-0 focus-visible:!outline-none gap-1.5 [&>svg]:opacity-100 [&>svg]:text-neutral-400"
+                >
+                  <SelectValue placeholder={sectionLabel[activeSection]} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="overview">Recent Backups</SelectItem>
+                  <SelectItem value="settings">Settings</SelectItem>
+                  <SelectItem value="external">External Restore</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {activeSection === "overview" ? (
+              <Button
+                onClick={() => manualBackupMutation.mutate()}
+                disabled={
+                  manualBackupMutation.isPending ||
+                  (settingsForm.provider === "s3" && !settingsForm.bucket)
+                }
+                className="gap-2"
+              >
+                {manualBackupMutation.isPending
+                  ? "Starting..."
+                  : "Create Backup"}
+              </Button>
+            ) : (
+              <div />
+            )}
+          </div>
+
           {activeSection === "overview" && (
             <div className="flex-1 flex flex-col">
-              <div className="flex items-center justify-between p-4 border-b border-border">
-                <h2 className="text-xl md:text-2xl font-medium text-neutral-200">
-                  Recent Backups
-                </h2>
-                <Button
-                  onClick={() => manualBackupMutation.mutate()}
-                  disabled={
-                    manualBackupMutation.isPending ||
-                    (settingsForm.provider === "s3" && !settingsForm.bucket)
-                  }
-                  className="gap-2"
-                >
-                  {manualBackupMutation.isPending
-                    ? "Starting..."
-                    : "Create Backup"}
-                </Button>
-              </div>
-
               <div className="flex-1 overflow-auto">
                 <Table className="border-separate border-spacing-0 min-w-[720px]">
                   <TableHeader>
@@ -694,39 +702,56 @@ export default function Backup() {
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                 <div className="border border-border rounded-xl bg-card p-5 space-y-4">
                   <div>
-                    <h4 className="text-sm font-medium text-neutral-200">Storage Target</h4>
+                    <h4 className="text-sm font-medium text-neutral-200">
+                      Storage Target
+                    </h4>
                     <p className="text-xs text-neutral-500 mt-1">
                       Where backup files are uploaded.
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-neutral-400">Provider</label>
+                    <label className="text-xs font-medium text-neutral-400">
+                      Provider
+                    </label>
                     <select
                       className="w-full bg-neutral-900 border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                       value={settingsForm.provider}
                       onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, provider: e.target.value })
+                        setSettingsForm({
+                          ...settingsForm,
+                          provider: e.target.value,
+                        })
                       }
                     >
                       <option value="s3">S3 Compatible Storage</option>
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-neutral-400">Bucket Name</label>
+                    <label className="text-xs font-medium text-neutral-400">
+                      Bucket Name
+                    </label>
                     <Input
                       value={settingsForm.bucket}
                       onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, bucket: e.target.value })
+                        setSettingsForm({
+                          ...settingsForm,
+                          bucket: e.target.value,
+                        })
                       }
                       placeholder="my-database-backups"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-neutral-400">Path Prefix</label>
+                    <label className="text-xs font-medium text-neutral-400">
+                      Path Prefix
+                    </label>
                     <Input
                       value={settingsForm.path_prefix}
                       onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, path_prefix: e.target.value })
+                        setSettingsForm({
+                          ...settingsForm,
+                          path_prefix: e.target.value,
+                        })
                       }
                       placeholder="/baseful/backups"
                     />
@@ -735,27 +760,39 @@ export default function Backup() {
 
                 <div className="border border-border rounded-xl bg-card p-5 space-y-4">
                   <div>
-                    <h4 className="text-sm font-medium text-neutral-200">Connection</h4>
+                    <h4 className="text-sm font-medium text-neutral-200">
+                      Connection
+                    </h4>
                     <p className="text-xs text-neutral-500 mt-1">
                       Endpoint and region used for object storage.
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-neutral-400">Region</label>
+                    <label className="text-xs font-medium text-neutral-400">
+                      Region
+                    </label>
                     <Input
                       value={settingsForm.region}
                       onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, region: e.target.value })
+                        setSettingsForm({
+                          ...settingsForm,
+                          region: e.target.value,
+                        })
                       }
                       placeholder="us-east-1"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-neutral-400">Endpoint URL</label>
+                    <label className="text-xs font-medium text-neutral-400">
+                      Endpoint URL
+                    </label>
                     <Input
                       value={settingsForm.endpoint}
                       onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, endpoint: e.target.value })
+                        setSettingsForm({
+                          ...settingsForm,
+                          endpoint: e.target.value,
+                        })
                       }
                       placeholder="https://s3.amazonaws.com"
                     />
@@ -767,28 +804,40 @@ export default function Backup() {
 
                 <div className="border border-border rounded-xl bg-card p-5 space-y-4">
                   <div>
-                    <h4 className="text-sm font-medium text-neutral-200">Credentials</h4>
+                    <h4 className="text-sm font-medium text-neutral-200">
+                      Credentials
+                    </h4>
                     <p className="text-xs text-neutral-500 mt-1">
                       Access key pair used to upload and read backups.
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-neutral-400">Access Key ID</label>
+                    <label className="text-xs font-medium text-neutral-400">
+                      Access Key ID
+                    </label>
                     <Input
                       type="password"
                       value={settingsForm.access_key}
                       onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, access_key: e.target.value })
+                        setSettingsForm({
+                          ...settingsForm,
+                          access_key: e.target.value,
+                        })
                       }
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-neutral-400">Secret Access Key</label>
+                    <label className="text-xs font-medium text-neutral-400">
+                      Secret Access Key
+                    </label>
                     <Input
                       type="password"
                       value={settingsForm.secret_key}
                       onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, secret_key: e.target.value })
+                        setSettingsForm({
+                          ...settingsForm,
+                          secret_key: e.target.value,
+                        })
                       }
                     />
                   </div>
@@ -797,7 +846,9 @@ export default function Backup() {
                 <div className="border border-border rounded-xl bg-card p-5 space-y-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h4 className="text-sm font-medium text-neutral-200">Encryption</h4>
+                      <h4 className="text-sm font-medium text-neutral-200">
+                        Encryption
+                      </h4>
                       <p className="text-xs text-neutral-500 mt-1">
                         Encrypt backups with your public key before upload.
                       </p>
@@ -813,7 +864,9 @@ export default function Backup() {
                   </div>
                   <div className="flex items-center justify-between rounded-lg border border-border bg-neutral-900 px-3 py-2">
                     <div>
-                      <p className="text-xs text-neutral-200">Encrypt Backups</p>
+                      <p className="text-xs text-neutral-200">
+                        Encrypt Backups
+                      </p>
                       <p className="text-[10px] text-neutral-500 mt-0.5">
                         Disabled by default.
                       </p>
@@ -821,7 +874,10 @@ export default function Backup() {
                     <Switch
                       checked={settingsForm.encryption_enabled}
                       onCheckedChange={(c: boolean) =>
-                        setSettingsForm({ ...settingsForm, encryption_enabled: c })
+                        setSettingsForm({
+                          ...settingsForm,
+                          encryption_enabled: c,
+                        })
                       }
                     />
                   </div>
@@ -843,7 +899,6 @@ export default function Backup() {
                   </div>
                 </div>
               </div>
-
             </div>
           )}
 
@@ -1023,16 +1078,21 @@ export default function Backup() {
           <DialogHeader>
             <DialogTitle>Backup Encryption Key Guide</DialogTitle>
             <DialogDescription>
-              End-to-end setup for creating and using a key pair with encrypted backups on macOS, Linux, and Windows.
+              End-to-end setup for creating and using a key pair with encrypted
+              backups on macOS, Linux, and Windows.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 text-sm">
             <section className="space-y-2">
-              <h4 className="text-neutral-100 font-medium">1. Generate a new key pair</h4>
-              <p className="text-neutral-400">Use RSA for compatibility with backup encryption.</p>
+              <h4 className="text-neutral-100 font-medium">
+                1. Generate a new key pair
+              </h4>
+              <p className="text-neutral-400">
+                Use RSA for compatibility with backup encryption.
+              </p>
               <pre className="text-[11px] bg-neutral-900 border border-border rounded-md p-3 overflow-x-auto text-neutral-300 whitespace-pre-wrap">
-{`macOS (Homebrew):
+                {`macOS (Homebrew):
 brew install gnupg
 gpg --full-generate-key
 
@@ -1053,12 +1113,15 @@ gpg --full-generate-key
             </section>
 
             <section className="space-y-2">
-              <h4 className="text-neutral-100 font-medium">2. Export and store your keys</h4>
+              <h4 className="text-neutral-100 font-medium">
+                2. Export and store your keys
+              </h4>
               <p className="text-neutral-400">
-                Paste only the public key into Baseful. Keep private key outside the app.
+                Paste only the public key into Baseful. Keep private key outside
+                the app.
               </p>
               <pre className="text-[11px] bg-neutral-900 border border-border rounded-md p-3 overflow-x-auto text-neutral-300 whitespace-pre-wrap">
-{`# Export public key (paste in Backup Settings)
+                {`# Export public key (paste in Backup Settings)
 gpg --armor --export your-email@example.com > public-rsa.asc
 
 # Export private key (store securely outside Baseful)
@@ -1067,22 +1130,29 @@ gpg --armor --export-secret-keys your-email@example.com > private-rsa.asc`}
             </section>
 
             <section className="space-y-2">
-              <h4 className="text-neutral-100 font-medium">3. Configure Baseful</h4>
+              <h4 className="text-neutral-100 font-medium">
+                3. Configure Baseful
+              </h4>
               <p className="text-neutral-400">
-                In Backup Settings, paste the armored public key, enable encryption, and save.
+                In Backup Settings, paste the armored public key, enable
+                encryption, and save.
               </p>
               <p className="text-neutral-400">
-                Important: only backups created after enabling encryption are encrypted.
+                Important: only backups created after enabling encryption are
+                encrypted.
               </p>
             </section>
 
             <section className="space-y-2">
-              <h4 className="text-neutral-100 font-medium">4. Download or restore encrypted backups</h4>
+              <h4 className="text-neutral-100 font-medium">
+                4. Download or restore encrypted backups
+              </h4>
               <p className="text-neutral-400">
-                Baseful will ask for your private key and passphrase each time. They are not stored.
+                Baseful will ask for your private key and passphrase each time.
+                They are not stored.
               </p>
               <pre className="text-[11px] bg-neutral-900 border border-border rounded-md p-3 overflow-x-auto text-neutral-300 whitespace-pre-wrap">
-{`# Optional local decrypt command
+                {`# Optional local decrypt command
 gpg --decrypt backup.sql.gpg > backup.sql`}
               </pre>
             </section>
@@ -1144,10 +1214,13 @@ gpg --decrypt backup.sql.gpg > backup.sql`}
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {decryptMode === "download" ? "Decrypt & Download Backup" : "Decrypt & Restore Backup"}
+              {decryptMode === "download"
+                ? "Decrypt & Download Backup"
+                : "Decrypt & Restore Backup"}
             </DialogTitle>
             <DialogDescription>
-              Provide the private key for this encrypted backup. The key is used only for this action and is not stored.
+              Provide the private key for this encrypted backup. The key is used
+              only for this action and is not stored.
             </DialogDescription>
           </DialogHeader>
 
@@ -1186,7 +1259,11 @@ gpg --decrypt backup.sql.gpg > backup.sql`}
               Cancel
             </Button>
             <Button onClick={handleDecryptAction} disabled={decryptLoading}>
-              {decryptLoading ? "Processing..." : decryptMode === "download" ? "Decrypt & Download" : "Decrypt & Restore"}
+              {decryptLoading
+                ? "Processing..."
+                : decryptMode === "download"
+                  ? "Decrypt & Download"
+                  : "Decrypt & Restore"}
             </Button>
           </DialogFooter>
         </DialogContent>

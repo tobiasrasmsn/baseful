@@ -128,7 +128,7 @@ success "✓ Dependencies are ready."
 info "[2/8] Cloning Baseful repository..."
 
 $SUDO mkdir -p "$INSTALL_DIR"
-$SUDO chown "$(whoami):$(whoami)" "$INSTALL_DIR"
+$SUDO chown -R "$(whoami):$(whoami)" "$INSTALL_DIR"
 
 if [ -f "$INSTALL_DIR/docker-compose.yml" ] && grep -q "baseful" "$INSTALL_DIR/docker-compose.yml"; then
     warn "Existing Baseful install found. Updating..."

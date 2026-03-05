@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   TableIcon,
-  CaretUp,
   CaretDown,
+  CaretUp,
   CaretUpDown,
   X,
 } from "@phosphor-icons/react";
@@ -391,32 +391,6 @@ export default function Tables() {
             </h1>
           </div>
         </div>
-        <div className="md:hidden w-36">
-          <Select
-            value={selectedTableName ?? undefined}
-            onValueChange={(value) => fetchTableData(value)}
-            disabled={loading || tables.length === 0}
-          >
-            <SelectTrigger size="sm" className="w-full text-xs">
-              <SelectValue
-                placeholder={loading ? "Loading..." : "Select table"}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {tables.length === 0 ? (
-                <SelectItem value="none" disabled>
-                  No tables
-                </SelectItem>
-              ) : (
-                tables.map((table) => (
-                  <SelectItem key={table.name} value={table.name}>
-                    {table.name}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       {/* Main content */}
@@ -518,9 +492,36 @@ export default function Tables() {
                   )}
                   <div className="flex flex-row items-center justify-between gap-3 p-4">
                     <div>
-                      <h2 className="text-2xl font-medium text-neutral-100">
+                      <h2 className="hidden md:block text-2xl font-medium text-neutral-100">
                         {selectedTable.name}
                       </h2>
+                      <div className="md:hidden">
+                        <Select
+                          value={selectedTableName ?? undefined}
+                          onValueChange={(value) => fetchTableData(value)}
+                          disabled={tables.length === 0}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="h-auto w-auto !border-0 !bg-transparent dark:!bg-transparent hover:!bg-transparent dark:hover:!bg-transparent active:!bg-transparent data-[state=open]:!bg-transparent !p-0 text-2xl font-medium text-neutral-100 !shadow-none !ring-0 !ring-offset-0 !outline-none focus:!ring-0 focus-visible:!ring-0 focus-visible:!border-0 focus-visible:!outline-none gap-1.5 [&>svg]:opacity-100 [&>svg]:text-neutral-400"
+                          >
+                            <SelectValue placeholder={selectedTable.name} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tables.length === 0 ? (
+                              <SelectItem value="none" disabled>
+                                No tables
+                              </SelectItem>
+                            ) : (
+                              tables.map((table) => (
+                                <SelectItem key={table.name} value={table.name}>
+                                  {table.name}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <p className="text-sm text-neutral-400">
                         {selectedTable.count} rows,{" "}
                         {selectedTable.columns.length} columns
