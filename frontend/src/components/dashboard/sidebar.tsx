@@ -7,7 +7,6 @@ import {
   Globe,
   GraphIcon,
   HouseIcon,
-  PencilSimpleIcon,
   PlusIcon,
   TableIcon,
   TerminalIcon,
