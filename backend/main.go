@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -55,6 +56,183 @@ func generatePassword(length int) (string, error) {
 		return "", err
 	}
 	return base64.URLEncoding.EncodeToString(b)[:length], nil
+}
+
+func maskAPIKey(key string) string {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) <= 8 {
+		return "********"
+	}
+	return trimmed[:4] + strings.Repeat("*", len(trimmed)-8) + trimmed[len(trimmed)-4:]
+}
+
+func sanitizeSQLResponse(raw string) string {
+	sqlText := strings.TrimSpace(raw)
+	if strings.HasPrefix(sqlText, "```") {
+		lines := strings.Split(sqlText, "\n")
+		if len(lines) >= 2 {
+			if strings.HasPrefix(lines[0], "```") {
+				lines = lines[1:]
+			}
+			if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
+				lines = lines[:len(lines)-1]
+			}
+			sqlText = strings.TrimSpace(strings.Join(lines, "\n"))
+		}
+	}
+	if strings.HasPrefix(strings.ToLower(sqlText), "sql\n") {
+		sqlText = strings.TrimSpace(sqlText[4:])
+	}
+	return sqlText
+}
+
+func fetchSchemaSummary(ctx context.Context, cli *client.Client, containerID, dbName string) (string, error) {
+	schemaCmd := []string{"psql", "-U", "postgres", "-d", dbName, "-t", "-A", "-F", "|", "-c",
+		"SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position"}
+	schemaExec, err := cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+		Cmd:          schemaCmd,
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return "", err
+	}
+	schemaAttach, err := cli.ContainerExecAttach(ctx, schemaExec.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return "", err
+	}
+	defer schemaAttach.Close()
+
+	var stdout, stderr bytes.Buffer
+	_, _ = stdcopy.StdCopy(&stdout, &stderr, schemaAttach.Reader)
+	if stderr.Len() > 0 && strings.TrimSpace(stdout.String()) == "" {
+		return "", errors.New(strings.TrimSpace(stderr.String()))
+	}
+
+	tableColumns := map[string][]string{}
+	for _, line := range strings.Split(stdout.String(), "\n") {
+		parts := strings.Split(strings.TrimSpace(line), "|")
+		if len(parts) < 3 {
+			continue
+		}
+		tableName := strings.TrimSpace(parts[0])
+		columnName := strings.TrimSpace(parts[1])
+		columnType := strings.TrimSpace(parts[2])
+		if tableName == "" || columnName == "" {
+			continue
+		}
+		tableColumns[tableName] = append(tableColumns[tableName], fmt.Sprintf("%s (%s)", columnName, columnType))
+	}
+
+	if len(tableColumns) == 0 {
+		return "No tables found in public schema.", nil
+	}
+
+	var b strings.Builder
+	b.WriteString("Public schema tables and columns:\n")
+	for tableName, columns := range tableColumns {
+		b.WriteString("- ")
+		b.WriteString(tableName)
+		b.WriteString(": ")
+		b.WriteString(strings.Join(columns, ", "))
+		b.WriteString("\n")
+	}
+	summary := b.String()
+	if len(summary) > 12000 {
+		return summary[:12000], nil
+	}
+	return summary, nil
+}
+
+func requestSQLFromOpenRouter(apiKey, systemPrompt, userPrompt string) (string, error) {
+	type message struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	type openRouterRequest struct {
+		Model       string    `json:"model"`
+		Messages    []message `json:"messages"`
+		Temperature float64   `json:"temperature"`
+		MaxTokens   int       `json:"max_tokens"`
+	}
+	type openRouterResponse struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	models := []string{
+		"google/gemini-3.1-flash-lite-preview",
+		"deepseek/deepseek-v3.2",
+	}
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+
+	var lastErr error
+	for _, model := range models {
+		reqBody := openRouterRequest{
+			Model: model,
+			Messages: []message{
+				{Role: "system", Content: systemPrompt},
+				{Role: "user", Content: userPrompt},
+			},
+			Temperature: 0.1,
+			MaxTokens:   800,
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			return "", err
+		}
+
+		req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(bodyBytes))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("HTTP-Referer", "https://baseful.local")
+		req.Header.Set("X-Title", "Baseful SQL Assistant")
+
+		res, err := httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		rawBody, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			lastErr = fmt.Errorf("model %s failed: %s", model, strings.TrimSpace(string(rawBody)))
+			continue
+		}
+
+		var parsed openRouterResponse
+		if err := json.Unmarshal(rawBody, &parsed); err != nil {
+			lastErr = err
+			continue
+		}
+		if len(parsed.Choices) == 0 {
+			lastErr = fmt.Errorf("model %s returned no choices", model)
+			continue
+		}
+
+		sqlText := sanitizeSQLResponse(parsed.Choices[0].Message.Content)
+		if strings.TrimSpace(sqlText) == "" {
+			lastErr = fmt.Errorf("model %s returned empty SQL", model)
+			continue
+		}
+		return sqlText, nil
+	}
+
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "", fmt.Errorf("failed to generate SQL")
 }
 
 func main() {
@@ -371,6 +549,45 @@ func main() {
 		c.JSON(200, gin.H{"avatarUrl": avatarURL})
 	})
 
+	// OpenRouter API key status
+	r.GET("/api/auth/openrouter-key", func(c *gin.Context) {
+		userID := c.MustGet("user_id").(int)
+		apiKey, err := db.GetUserOpenRouterAPIKey(userID)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to load OpenRouter key status"})
+			return
+		}
+
+		trimmed := strings.TrimSpace(apiKey)
+		c.JSON(200, gin.H{
+			"configured": len(trimmed) > 0,
+			"maskedKey":  maskAPIKey(trimmed),
+		})
+	})
+
+	// Set or clear OpenRouter API key
+	r.PUT("/api/auth/openrouter-key", func(c *gin.Context) {
+		userID := c.MustGet("user_id").(int)
+		var req struct {
+			APIKey string `json:"apiKey"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request"})
+			return
+		}
+
+		apiKey := strings.TrimSpace(req.APIKey)
+		if err := db.UpdateUserOpenRouterAPIKey(userID, apiKey); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to save OpenRouter API key"})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"configured": len(apiKey) > 0,
+			"maskedKey":  maskAPIKey(apiKey),
+		})
+	})
+
 	// Whitelist management (Admin only)
 	r.GET("/api/auth/whitelist", auth.AdminOnly(), func(c *gin.Context) {
 		emails, err := db.GetWhitelistedEmails()
@@ -604,6 +821,87 @@ func main() {
 				fmt.Printf("Restore failed for DB %d: %v\n", id, backupId)
 			} else {
 				fmt.Printf("Restore completed for DB %d\n", id)
+			}
+		}()
+		c.JSON(200, gin.H{"message": "Restore started"})
+	})
+
+	r.POST("/api/databases/:id/backups/:backupId/download-decrypted", func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+		backupIdStr := c.Param("backupId")
+		backupId, err := strconv.Atoi(backupIdStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid backup ID"})
+			return
+		}
+
+		var req struct {
+			PrivateKey string `json:"private_key"`
+			Passphrase string `json:"passphrase"`
+		}
+		_ = c.ShouldBindJSON(&req)
+
+		reader, filename, _, err := backups.GetBackupDownloadReader(id, backupId, req.PrivateKey, req.Passphrase)
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		defer reader.Close()
+
+		c.Header("Content-Type", "application/sql")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		if _, err := io.Copy(c.Writer, reader); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to stream backup"})
+			return
+		}
+	})
+
+	r.POST("/api/databases/:id/backups/:backupId/restore-with-key", func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid database ID"})
+			return
+		}
+		backupIdStr := c.Param("backupId")
+		backupId, err := strconv.Atoi(backupIdStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid backup ID"})
+			return
+		}
+
+		var req struct {
+			PrivateKey string `json:"private_key"`
+			Passphrase string `json:"passphrase"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request body"})
+			return
+		}
+		if strings.TrimSpace(req.PrivateKey) == "" {
+			c.JSON(400, gin.H{"error": "private_key is required"})
+			return
+		}
+
+		// Validate key/decryption upfront so the client gets immediate feedback for wrong keys.
+		reader, _, _, err := backups.GetBackupDownloadReader(id, backupId, req.PrivateKey, req.Passphrase)
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		_ = reader.Close()
+
+		go func() {
+			fmt.Printf("Starting encrypted restore for DB %d from backup %d...\n", id, backupId)
+			if err := backups.RestoreBackupWithPrivateKey(id, backupId, req.PrivateKey, req.Passphrase); err != nil {
+				fmt.Printf("Encrypted restore failed for DB %d backup %d: %v\n", id, backupId, err)
+			} else {
+				fmt.Printf("Encrypted restore completed for DB %d backup %d\n", id, backupId)
 			}
 		}()
 		c.JSON(200, gin.H{"message": "Restore started"})
@@ -1460,6 +1758,97 @@ func main() {
 		c.JSON(200, gin.H{"message": fmt.Sprintf("Branch %sed", action)})
 	})
 
+	// SQL Assistant Endpoint
+	r.POST("/api/databases/:id/sql-assistant", func(c *gin.Context) {
+		id := c.Param("id")
+		userID := c.MustGet("user_id").(int)
+
+		apiKey, err := db.GetUserOpenRouterAPIKey(userID)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to read OpenRouter API key"})
+			return
+		}
+		if strings.TrimSpace(apiKey) == "" {
+			c.JSON(400, gin.H{"error": "OpenRouter API key not configured. Add it in Profile settings."})
+			return
+		}
+
+		var dbID, port int
+		var name, dbType, host, status, version, password string
+		err = db.DB.QueryRow(
+			"SELECT id, name, type, host, port, status, version, password FROM databases WHERE id = ?",
+			id,
+		).Scan(&dbID, &name, &dbType, &host, &port, &status, &version, &password)
+		if err != nil {
+			c.JSON(404, gin.H{"error": "Database not found"})
+			return
+		}
+		if status != "active" {
+			c.JSON(400, gin.H{"error": "Database is not running"})
+			return
+		}
+
+		var req struct {
+			Prompt       string `json:"prompt"`
+			CurrentQuery string `json:"currentQuery"`
+		}
+		if err := c.BindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request"})
+			return
+		}
+		if strings.TrimSpace(req.Prompt) == "" {
+			c.JSON(400, gin.H{"error": "Prompt cannot be empty"})
+			return
+		}
+
+		ctx := context.Background()
+		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to connect to Docker"})
+			return
+		}
+		defer cli.Close()
+
+		var containerID string
+		err = db.DB.QueryRow("SELECT container_id FROM databases WHERE id = ?", id).Scan(&containerID)
+		if err != nil {
+			c.JSON(404, gin.H{"error": "Container not found"})
+			return
+		}
+
+		schemaSummary, err := fetchSchemaSummary(ctx, cli, containerID, name)
+		if err != nil {
+			schemaSummary = "Schema summary unavailable."
+		}
+
+		systemPrompt := strings.Join([]string{
+			"You are a PostgreSQL SQL generator.",
+			"Return ONLY executable SQL and nothing else.",
+			"Do not use markdown fences.",
+			"Do not add explanations.",
+			"Use only PostgreSQL syntax.",
+			"If the request is ambiguous, return a safe SELECT query asking for clarification as a string column.",
+		}, " ")
+
+		userPrompt := fmt.Sprintf(
+			"Database name: %s\nSchema:\n%s\nCurrent editor SQL:\n%s\nUser request:\n%s\nOutput only SQL.",
+			name,
+			schemaSummary,
+			req.CurrentQuery,
+			req.Prompt,
+		)
+
+		sqlText, err := requestSQLFromOpenRouter(apiKey, systemPrompt, userPrompt)
+		if err != nil {
+			c.JSON(502, gin.H{"error": "Failed to generate SQL via OpenRouter: " + err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"sql": sqlText,
+		})
+	})
+
 	// SQL Query Endpoint
 	r.POST("/api/databases/:id/query", func(c *gin.Context) {
 		id := c.Param("id")
@@ -1716,6 +2105,60 @@ func main() {
 			}
 		}
 
+		// Get foreign key relations for this table
+		relationsCmd := []string{"psql", "-U", "postgres", "-d", name, "-t", "-A", "-F", "|", "-c",
+			fmt.Sprintf(`
+				SELECT
+					kcu.column_name,
+					ccu.table_name AS foreign_table_name,
+					ccu.column_name AS foreign_column_name
+				FROM information_schema.table_constraints tc
+				JOIN information_schema.key_column_usage kcu
+					ON tc.constraint_name = kcu.constraint_name
+					AND tc.table_schema = kcu.table_schema
+				JOIN information_schema.constraint_column_usage ccu
+					ON ccu.constraint_name = tc.constraint_name
+					AND ccu.table_schema = tc.table_schema
+				WHERE tc.constraint_type = 'FOREIGN KEY'
+					AND tc.table_schema = 'public'
+					AND tc.table_name = '%s'
+				ORDER BY kcu.ordinal_position
+			`, tableName)}
+		relationsExec, err := cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+			Cmd:          relationsCmd,
+			AttachStdout: true,
+			AttachStderr: true,
+		})
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to create exec"})
+			return
+		}
+		relationsAttach, err := cli.ContainerExecAttach(ctx, relationsExec.ID, container.ExecAttachOptions{})
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to attach to exec"})
+			return
+		}
+		var relationsStdout, relationsStderr bytes.Buffer
+		_, _ = stdcopy.StdCopy(&relationsStdout, &relationsStderr, relationsAttach.Reader)
+		relationsAttach.Close()
+
+		relations := []map[string]interface{}{}
+		for _, line := range strings.Split(relationsStdout.String(), "\n") {
+			parts := strings.Split(strings.TrimSpace(line), "|")
+			if len(parts) >= 3 {
+				sourceColumn := strings.TrimSpace(parts[0])
+				referencedTable := strings.TrimSpace(parts[1])
+				referencedColumn := strings.TrimSpace(parts[2])
+				if sourceColumn != "" && referencedTable != "" && referencedColumn != "" {
+					relations = append(relations, map[string]interface{}{
+						"sourceColumn":     sourceColumn,
+						"referencedTable":  referencedTable,
+						"referencedColumn": referencedColumn,
+					})
+				}
+			}
+		}
+
 		// Get pagination parameters
 		offset := c.DefaultQuery("offset", "0")
 		limit := c.DefaultQuery("limit", "100")
@@ -1819,6 +2262,7 @@ func main() {
 		c.JSON(200, gin.H{
 			"name":       tableName,
 			"columns":    columns,
+			"relations":  relations,
 			"rows":       rows,
 			"count":      len(rows),
 			"totalCount": totalCount,

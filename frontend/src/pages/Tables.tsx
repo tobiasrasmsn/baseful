@@ -5,6 +5,7 @@ import {
   CaretUp,
   CaretDown,
   CaretUpDown,
+  X,
 } from "@phosphor-icons/react";
 import { useDatabase } from "@/context/DatabaseContext";
 import { DitherAvatar } from "@/components/ui/hash-avatar";
@@ -40,8 +41,24 @@ interface ColumnInfo {
 interface TableData {
   name: string;
   columns: ColumnInfo[];
+  relations?: RelationInfo[];
   rows: Record<string, unknown>[];
   count: number;
+  totalCount?: number | string;
+}
+
+interface RelationInfo {
+  sourceColumn: string;
+  referencedTable: string;
+  referencedColumn: string;
+}
+
+interface RelationSubview {
+  relation: RelationInfo;
+  sourceValue: string;
+  loading: boolean;
+  error: string | null;
+  tableData: TableData | null;
 }
 
 export default function Tables() {
@@ -49,7 +66,7 @@ export default function Tables() {
   const { selectedDatabase } = useDatabase();
   const { token, logout } = useAuth();
   const [tables, setTables] = useState<TableInfo[]>([]);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTableName, setSelectedTableName] = useState<string | null>(
     null,
@@ -61,6 +78,8 @@ export default function Tables() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
+  const [relationSubview, setRelationSubview] =
+    useState<RelationSubview | null>(null);
 
   // Search filter state
   const [filterCol, setFilterCol] = useState<string>("");
@@ -133,6 +152,12 @@ export default function Tables() {
     if (id && selectedDatabase?.status === "active") {
       fetchTables();
     } else {
+      setTables([]);
+      setSelectedTableName(null);
+      setSelectedTable(null);
+      setEditedCells({});
+      setTotalRows(0);
+      setRelationSubview(null);
       setLoading(false);
     }
   }, [id, selectedDatabase]);
@@ -140,6 +165,10 @@ export default function Tables() {
   const fetchTables = async () => {
     setLoading(true);
     setError(null);
+    setSelectedTableName(null);
+    setSelectedTable(null);
+    setEditedCells({});
+    setRelationSubview(null);
     try {
       const res = await authFetch(
         `/api/databases/${id}/tables`,
@@ -150,6 +179,16 @@ export default function Tables() {
       if (!res.ok) throw new Error("Failed to fetch tables");
       const data = await res.json();
       setTables(data || []);
+      // Auto-select the first table if available
+      if (data && data.length > 0) {
+        fetchTableData(data[0].name);
+      } else {
+        setSelectedTableName(null);
+        setSelectedTable(null);
+        setEditedCells({});
+        setTotalRows(0);
+        setCurrentPage(1);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to fetch tables");
     } finally {
@@ -167,31 +206,66 @@ export default function Tables() {
     sBy?: string,
     sDir?: string,
   ) => {
+    const isSwitchingTable = tableName !== selectedTableName;
+    const nextFilterCol = fCol !== undefined ? fCol : "";
+    const nextFilterOp = fOp !== undefined ? fOp : "equals";
+    const nextFilterVal = fVal !== undefined ? fVal : "";
+    const nextSortBy = sBy !== undefined ? sBy : "id";
+    const nextSortOrder =
+      (sDir !== undefined ? sDir : "asc") === "desc" ? "desc" : "asc";
+
     // Reset filters and sort if we are switching to a different table
-    if (tableName !== selectedTableName) {
-      setFilterCol("");
-      setFilterOp("equals");
-      setFilterVal("");
-      setSortBy("id");
-      setSortOrder("asc");
+    if (isSwitchingTable) {
+      setFilterCol(nextFilterCol);
+      setFilterOp(nextFilterOp);
+      setFilterVal(nextFilterVal);
+      setSortBy(nextSortBy);
+      setSortOrder(nextSortOrder);
+      setRelationSubview(null);
+    } else {
+      if (fCol !== undefined) setFilterCol(fCol);
+      if (fOp !== undefined) setFilterOp(fOp);
+      if (fVal !== undefined) setFilterVal(fVal);
+      if (sBy !== undefined) setSortBy(sBy);
+      if (sDir !== undefined) setSortOrder(sDir === "desc" ? "desc" : "asc");
     }
 
     setSelectedTableName(tableName);
     setTableLoading(true);
     // Only reset if we're switching tables
-    if (tableName !== selectedTableName) {
+    if (isSwitchingTable) {
       setSelectedTable(null);
     }
     try {
       const offset = (page - 1) * limit;
       let url = `/api/databases/${id}/tables/${tableName}?offset=${offset}&limit=${limit}`;
 
-      // Use provided args or current state
-      const col = fCol !== undefined ? fCol : filterCol;
-      const op = fOp !== undefined ? fOp : filterOp;
-      const val = fVal !== undefined ? fVal : filterVal;
-      const sortByVal = sBy !== undefined ? sBy : sortBy;
-      const sortDirVal = sDir !== undefined ? sDir : sortOrder;
+      // Use computed "next" values on table switch to avoid stale state
+      const col = isSwitchingTable
+        ? nextFilterCol
+        : fCol !== undefined
+          ? fCol
+          : filterCol;
+      const op = isSwitchingTable
+        ? nextFilterOp
+        : fOp !== undefined
+          ? fOp
+          : filterOp;
+      const val = isSwitchingTable
+        ? nextFilterVal
+        : fVal !== undefined
+          ? fVal
+          : filterVal;
+      const sortByVal = isSwitchingTable
+        ? nextSortBy
+        : sBy !== undefined
+          ? sBy
+          : sortBy;
+      const sortDirVal = isSwitchingTable
+        ? nextSortOrder
+        : sDir !== undefined
+          ? sDir
+          : sortOrder;
 
       if (col && op && val) {
         url += `&filterCol=${encodeURIComponent(col)}&filterOp=${encodeURIComponent(op)}&filterVal=${encodeURIComponent(val)}`;
@@ -211,6 +285,60 @@ export default function Tables() {
       );
     } finally {
       setTableLoading(false);
+    }
+  };
+
+  const openRelationSubview = async (
+    relation: RelationInfo,
+    sourceValue: unknown,
+  ) => {
+    if (!id || sourceValue === null || sourceValue === undefined) return;
+
+    const sourceValueText = String(sourceValue).trim();
+    if (!sourceValueText) return;
+
+    setRelationSubview({
+      relation,
+      sourceValue: sourceValueText,
+      loading: true,
+      error: null,
+      tableData: null,
+    });
+
+    try {
+      const url =
+        `/api/databases/${id}/tables/${relation.referencedTable}` +
+        `?offset=0&limit=1` +
+        `&filterCol=${encodeURIComponent(relation.referencedColumn)}` +
+        `&filterOp=equals` +
+        `&filterVal=${encodeURIComponent(sourceValueText)}` +
+        `&sortBy=${encodeURIComponent(relation.referencedColumn)}` +
+        `&sortOrder=asc`;
+
+      const res = await authFetch(url, token, {}, logout);
+      if (!res.ok) throw new Error("Failed to fetch related row");
+      const data = await res.json();
+
+      setRelationSubview((prev) =>
+        prev
+          ? {
+              ...prev,
+              loading: false,
+              tableData: data || null,
+            }
+          : prev,
+      );
+    } catch (err: unknown) {
+      setRelationSubview((prev) =>
+        prev
+          ? {
+              ...prev,
+              loading: false,
+              error:
+                err instanceof Error ? err.message : "Failed to load relation",
+            }
+          : prev,
+      );
     }
   };
 
@@ -250,7 +378,7 @@ export default function Tables() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex flex-row border-b border-border p-4 items-center gap-4 w-full">
+      <div className="flex flex-row border-b border-border p-4 items-center gap-3 w-full">
         <div className="flex flex-row items-center gap-3 flex-1">
           <DitherAvatar
             value={selectedDatabase?.name || "database"}
@@ -258,8 +386,36 @@ export default function Tables() {
           />
 
           <div className="flex flex-row items-center gap-2">
-            <h1 className="text-2xl font-medium text-neutral-100">Tables</h1>
+            <h1 className="text-xl md:text-2xl font-medium text-neutral-100">
+              Tables
+            </h1>
           </div>
+        </div>
+        <div className="md:hidden w-36">
+          <Select
+            value={selectedTableName ?? undefined}
+            onValueChange={(value) => fetchTableData(value)}
+            disabled={loading || tables.length === 0}
+          >
+            <SelectTrigger size="sm" className="w-full text-xs">
+              <SelectValue
+                placeholder={loading ? "Loading..." : "Select table"}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {tables.length === 0 ? (
+                <SelectItem value="none" disabled>
+                  No tables
+                </SelectItem>
+              ) : (
+                tables.map((table) => (
+                  <SelectItem key={table.name} value={table.name}>
+                    {table.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -281,11 +437,24 @@ export default function Tables() {
           <p className="text-red-400">{error}</p>
         </div>
       ) : (
-        <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex flex-col md:flex-row min-h-0">
           {/* Tables sidebar */}
-          <div className="w-64 shrink-0 p-4 overflow-hidden flex flex-col">
+          <div className="hidden md:flex w-64 shrink-0 p-4 overflow-hidden flex-col">
             <div className="overflow-y-auto flex-1 flex flex-col gap-1">
-              {tables.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-row items-center gap-2 px-3 py-1.5"
+                  >
+                    <Skeleton className="h-4 w-4 shrink-0 rounded-sm" />
+                    <Skeleton
+                      className="h-4 rounded"
+                      style={{ width: `${55 + ((i * 37) % 35)}%` }}
+                    />
+                  </div>
+                ))
+              ) : tables.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center">
                   <p className="text-neutral-400">No tables found</p>
                 </div>
@@ -324,8 +493,8 @@ export default function Tables() {
           </div>
 
           {/* Table content */}
-          <div className="flex-1 flex flex-col min-h-0 border-l border-border overflow-hidden relative">
-            {tableLoading && !selectedTable ? (
+          <div className="flex-1 flex flex-col min-h-0 md:border-l border-border overflow-hidden relative">
+            {(loading || tableLoading) && !selectedTable ? (
               <TableSkeleton name={selectedTableName} />
             ) : !selectedTable ? (
               <div className="flex-1 flex items-center justify-center">
@@ -355,6 +524,9 @@ export default function Tables() {
                       <p className="text-sm text-neutral-400">
                         {selectedTable.count} rows,{" "}
                         {selectedTable.columns.length} columns
+                        {selectedTable.relations?.length
+                          ? `, ${selectedTable.relations.length} relations`
+                          : ""}
                       </p>
                     </div>
                     {hasChanges && (
@@ -531,8 +703,7 @@ export default function Tables() {
                   </div>
                 </div>
 
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                  {/* Data */}
+                <div className="flex-1 flex min-h-0 overflow-hidden">
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     {!selectedTable.rows || selectedTable.rows.length === 0 ? (
                       <div className="flex-1 flex items-center justify-center">
@@ -579,6 +750,19 @@ export default function Tables() {
                                         )}
                                       </div>
                                     </button>
+                                  </th>
+                                ))}
+                                {selectedTable.relations?.map((relation, i) => (
+                                  <th
+                                    key={`relation-${i}`}
+                                    className="text-left bg-[#141414]! py-0 px-0 text-neutral-400 font-medium border-b border-r border-border last:border-r-0 min-w-[170px]"
+                                  >
+                                    <div className="w-full h-full flex flex-row items-center justify-between gap-2 px-2 py-2">
+                                      <span className="truncate">
+                                        {relation.sourceColumn} →{" "}
+                                        {relation.referencedTable}
+                                      </span>
+                                    </div>
                                   </th>
                                 ))}
                               </tr>
@@ -776,6 +960,61 @@ export default function Tables() {
                                       </td>
                                     );
                                   })}
+                                  {selectedTable.relations?.map(
+                                    (relation, relationIndex) => {
+                                      const sourceValue =
+                                        row[relation.sourceColumn];
+                                      const hasLink =
+                                        sourceValue !== null &&
+                                        sourceValue !== undefined &&
+                                        String(sourceValue).trim() !== "";
+
+                                      const isCurrentRelation =
+                                        relationSubview &&
+                                        relationSubview.relation
+                                          .sourceColumn ===
+                                          relation.sourceColumn &&
+                                        relationSubview.relation
+                                          .referencedTable ===
+                                          relation.referencedTable &&
+                                        relationSubview.sourceValue ===
+                                          String(sourceValue);
+
+                                      return (
+                                        <td
+                                          key={`relation-cell-${relationIndex}`}
+                                          className="py-0.5 px-0 font-mono text-xs border-b border-r border-border last:border-r-0 min-w-[170px] max-w-[250px]"
+                                        >
+                                          {hasLink ? (
+                                            <button
+                                              onClick={() =>
+                                                openRelationSubview(
+                                                  relation,
+                                                  sourceValue,
+                                                )
+                                              }
+                                              className={`w-fit ml-2 text-left truncate transition-colors `}
+                                              title={`Open related ${relation.referencedTable} row`}
+                                            >
+                                              <div
+                                                className={`rounded px-1 py-0.5 ${
+                                                  isCurrentRelation
+                                                    ? "bg-blue-500/75 text-blue-200"
+                                                    : "bg-blue-500/20 text-blue-300 hover:bg-blue-800/40"
+                                                }`}
+                                              >
+                                                {relation.referencedTable}
+                                              </div>
+                                            </button>
+                                          ) : (
+                                            <span className="px-2 text-neutral-600 italic">
+                                              No link
+                                            </span>
+                                          )}
+                                        </td>
+                                      );
+                                    },
+                                  )}
                                 </tr>
                               ))}
                             </tbody>
@@ -893,6 +1132,112 @@ export default function Tables() {
                       </>
                     )}
                   </div>
+                  {relationSubview && (
+                    <div className="w-105 border-l border-border bg-card shrink-0 flex flex-col min-h-0">
+                      <div className="p-3 h-17.5 border-b border-border flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-base font-medium text-neutral-100 truncate">
+                            {relationSubview.relation.referencedTable} subview
+                          </p>
+                          <p className="text-xs text-neutral-500 truncate">
+                            {relationSubview.relation.sourceColumn} ={" "}
+                            {relationSubview.sourceValue}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setRelationSubview(null)}
+                          className="p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200"
+                          title="Close subview"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <div className="flex-1 overflow-auto ">
+                        {relationSubview.loading ? (
+                          <p className="text-xs text-neutral-500">
+                            Loading related row...
+                          </p>
+                        ) : relationSubview.error ? (
+                          <p className="text-xs text-red-400">
+                            {relationSubview.error}
+                          </p>
+                        ) : !relationSubview.tableData?.rows?.length ? (
+                          <p className="text-xs text-neutral-500">
+                            No related row found.
+                          </p>
+                        ) : (
+                          <table className="w-full text-xs border-separate border-spacing-0">
+                            <thead>
+                              <tr>
+                                {relationSubview.tableData.columns.map(
+                                  (col, i) => (
+                                    <th
+                                      key={i}
+                                      className="text-left py-1 px-2 text-neutral-400 border-b border-r border-border last:border-r-0 bg-card"
+                                    >
+                                      {col.name}
+                                    </th>
+                                  ),
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                {relationSubview.tableData.columns.map(
+                                  (col, i) => (
+                                    <td
+                                      key={i}
+                                      className="py-1 px-2 text-neutral-200 border-b border-r border-border last:border-r-0 font-mono"
+                                    >
+                                      {relationSubview.tableData?.rows?.[0]?.[
+                                        col.name
+                                      ] === null ||
+                                      relationSubview.tableData?.rows?.[0]?.[
+                                        col.name
+                                      ] === undefined ? (
+                                        <span className="text-neutral-600 italic">
+                                          NULL
+                                        </span>
+                                      ) : (
+                                        String(
+                                          relationSubview.tableData.rows[0][
+                                            col.name
+                                          ],
+                                        )
+                                      )}
+                                    </td>
+                                  ),
+                                )}
+                              </tr>
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+
+                      <div className="p-3 border-t border-border">
+                        <button
+                          onClick={() => {
+                            const relation = relationSubview.relation;
+                            fetchTableData(
+                              relation.referencedTable,
+                              1,
+                              rowsPerPage,
+                              relation.referencedColumn,
+                              "equals",
+                              relationSubview.sourceValue,
+                              relation.referencedColumn,
+                              "asc",
+                            );
+                            setRelationSubview(null);
+                          }}
+                          className="w-full text-xs px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors"
+                        >
+                          Open in Table
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}

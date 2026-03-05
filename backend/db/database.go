@@ -119,6 +119,7 @@ func InitDB() error {
         last_name TEXT,
         is_admin BOOLEAN DEFAULT 0,
         avatar_url TEXT,
+        openrouter_api_key TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -149,6 +150,8 @@ func InitDB() error {
 		access_key TEXT,
 		secret_key TEXT,
 		path_prefix TEXT,
+		encryption_enabled BOOLEAN DEFAULT 0,
+		encryption_public_key TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (database_id) REFERENCES databases(id)
@@ -159,6 +162,7 @@ func InitDB() error {
 		database_id INTEGER NOT NULL,
 		filename TEXT NOT NULL,
 		object_key TEXT,
+		is_encrypted BOOLEAN DEFAULT 0,
 		size_bytes INTEGER,
 		status TEXT, -- 'pending', 'completed', 'failed'
 		s3_url TEXT,
@@ -174,6 +178,9 @@ func InitDB() error {
 
 	// Migration: Add object_key if not exists
 	DB.Exec("ALTER TABLE backups ADD COLUMN object_key TEXT")
+	DB.Exec("ALTER TABLE backups ADD COLUMN is_encrypted BOOLEAN DEFAULT 0")
+	DB.Exec("ALTER TABLE backup_settings ADD COLUMN encryption_enabled BOOLEAN DEFAULT 0")
+	DB.Exec("ALTER TABLE backup_settings ADD COLUMN encryption_public_key TEXT")
 
 	// Migration: Add project_id column if it doesn't exist
 	// SQLite doesn't support ADD COLUMN IF NOT EXISTS, so we just ignore errors
@@ -201,6 +208,7 @@ func InitDB() error {
 	DB.Exec("ALTER TABLE users ADD COLUMN first_name TEXT")
 	DB.Exec("ALTER TABLE users ADD COLUMN last_name TEXT")
 	DB.Exec("ALTER TABLE users ADD COLUMN avatar_url TEXT")
+	DB.Exec("ALTER TABLE users ADD COLUMN openrouter_api_key TEXT")
 	DB.Exec(`CREATE TABLE IF NOT EXISTS whitelisted_emails (
         email TEXT PRIMARY KEY,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP

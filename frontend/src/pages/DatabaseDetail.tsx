@@ -112,7 +112,12 @@ export default function DatabaseDetail() {
     useQuery<DatabaseMetrics>({
       queryKey: ["metrics", id, token],
       queryFn: async () => {
-        const res = await authFetch(`/api/databases/${id}/metrics`, token, {}, logout);
+        const res = await authFetch(
+          `/api/databases/${id}/metrics`,
+          token,
+          {},
+          logout,
+        );
         if (!res.ok) throw new Error("Failed to fetch metrics");
         return res.json();
       },
@@ -124,7 +129,12 @@ export default function DatabaseDetail() {
   const { data: history = [] } = useQuery<MetricHistorySample[]>({
     queryKey: ["history", id, token],
     queryFn: async () => {
-      const res = await authFetch(`/api/databases/${id}/metrics/history`, token, {}, logout);
+      const res = await authFetch(
+        `/api/databases/${id}/metrics/history`,
+        token,
+        {},
+        logout,
+      );
       if (!res.ok) throw new Error("Failed to fetch history");
       return res.json();
     },
@@ -140,7 +150,12 @@ export default function DatabaseDetail() {
   }>({
     queryKey: ["limits", id, token],
     queryFn: async () => {
-      const res = await authFetch(`/api/databases/${id}/limits`, token, {}, logout);
+      const res = await authFetch(
+        `/api/databases/${id}/limits`,
+        token,
+        {},
+        logout,
+      );
       if (!res.ok) throw new Error("Failed to fetch limits");
       return res.json();
     },
@@ -245,9 +260,14 @@ export default function DatabaseDetail() {
 
     setActionLoading(action);
     try {
-      const res = await authFetch(`/api/databases/${id}/${action}`, token, {
-        method: "POST",
-      }, logout);
+      const res = await authFetch(
+        `/api/databases/${id}/${action}`,
+        token,
+        {
+          method: "POST",
+        },
+        logout,
+      );
       if (!res.ok) {
         throw new Error(`Failed to ${action} database`);
       }
@@ -281,7 +301,7 @@ export default function DatabaseDetail() {
         `/api/databases/${id}/connection-string?ssl=${useSSL}`,
         token,
         {},
-        logout
+        logout,
       );
       if (res.ok) {
         const data = await res.json();
@@ -421,7 +441,9 @@ export default function DatabaseDetail() {
                     onClick={() => handleAction("vacuum")}
                     variant={"secondary"}
                     className="cursor-pointer"
-                    disabled={actionLoading !== null || database?.status !== "active"}
+                    disabled={
+                      actionLoading !== null || database?.status !== "active"
+                    }
                   >
                     {actionLoading === "vacuum" ? "Vacuuming..." : "Vacuum"}
                   </Button>
@@ -472,12 +494,14 @@ export default function DatabaseDetail() {
                         </div>
                         <button
                           onClick={() => setUseDomain(!useDomain)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useDomain ? "bg-blue-600" : "bg-neutral-600"
-                            }`}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            useDomain ? "bg-blue-600" : "bg-neutral-600"
+                          }`}
                         >
                           <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useDomain ? "translate-x-6" : "translate-x-1"
-                              }`}
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              useDomain ? "translate-x-6" : "translate-x-1"
+                            }`}
                           />
                         </button>
                       </div>
@@ -500,14 +524,16 @@ export default function DatabaseDetail() {
                     <button
                       onClick={() => setUseSSL(!useSSL)}
                       disabled={useDomain}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useSSL || useDomain ? "bg-green-600" : "bg-neutral-600"
-                        } ${useDomain ? "opacity-50 cursor-not-allowed" : ""}`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        useSSL || useDomain ? "bg-green-600" : "bg-neutral-600"
+                      } ${useDomain ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useSSL || useDomain
-                          ? "translate-x-6"
-                          : "translate-x-1"
-                          }`}
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          useSSL || useDomain
+                            ? "translate-x-6"
+                            : "translate-x-1"
+                        }`}
                       />
                     </button>
                   </div>
@@ -577,7 +603,7 @@ export default function DatabaseDetail() {
               <div className="p-4">
                 <p className="text-2xl font-medium text-neutral-100 font-mono">
                   {metrics?.cpu_usage_percent !== undefined &&
-                    metrics?.cpu_usage_percent < 0.01
+                  metrics?.cpu_usage_percent < 0.01
                     ? metrics?.cpu_usage_percent.toFixed(4)
                     : (metrics?.cpu_usage_percent?.toFixed(1) ?? "0")}
                   %
@@ -755,7 +781,9 @@ export default function DatabaseDetail() {
             </div>
             <div className="h-[250px] w-full p-4 scale-105">
               {metricsLoading ? (
-                <Skeleton className="h-full w-full rounded-md" />
+                <div className="p-4 pb-3 w-full h-full">
+                  <Skeleton className="h-full w-full rounded-md" />
+                </div>
               ) : (
                 <div className="h-full w-full scale-105">
                   <ResponsiveContainer width="100%" height="100%">
@@ -886,7 +914,9 @@ export default function DatabaseDetail() {
             </div>
             <div className="h-[250px] w-full p-4 scale-105">
               {metricsLoading ? (
-                <Skeleton className="h-full w-full rounded-md" />
+                <div className="p-4 pb-3 w-full h-full">
+                  <Skeleton className="h-full w-full rounded-md" />
+                </div>
               ) : (
                 <div className="h-full w-full scale-105">
                   <ResponsiveContainer width="100%" height="100%">

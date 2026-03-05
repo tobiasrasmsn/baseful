@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
 import { Graph, Clock, Power, Check, Warning } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,16 +11,8 @@ interface MonitoringSettings {
   metrics_sample_rate: string;
 }
 
-interface Database {
-  id: number;
-  name: string;
-  type: string;
-}
-
 export default function Monitoring() {
-  const { id } = useParams<{ id: string }>();
   const { token, logout } = useAuth();
-  const [, setDatabase] = useState<Database | null>(null);
   const [settings, setSettings] = useState<MonitoringSettings>({
     metrics_enabled: true,
     metrics_sample_rate: "5",
@@ -36,22 +27,8 @@ export default function Monitoring() {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    if (id) {
-      fetchDatabase();
-      fetchSettings();
-    }
-  }, [id]);
-
-  const fetchDatabase = async () => {
-    try {
-      const res = await authFetch(`/api/databases/${id}`, token, {}, logout);
-      if (!res.ok) throw new Error("Database not found");
-      const data = await res.json();
-      setDatabase(data);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
+    fetchSettings();
+  }, []);
 
   const fetchSettings = async () => {
     try {

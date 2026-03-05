@@ -86,6 +86,31 @@ func UpdateUserAvatar(id int, avatarURL string) error {
 	return err
 }
 
+// UpdateUserOpenRouterAPIKey stores or clears a user's OpenRouter API key
+func UpdateUserOpenRouterAPIKey(id int, apiKey string) error {
+	_, err := DB.Exec(
+		"UPDATE users SET openrouter_api_key = ? WHERE id = ?",
+		apiKey, id,
+	)
+	return err
+}
+
+// GetUserOpenRouterAPIKey gets a user's OpenRouter API key
+func GetUserOpenRouterAPIKey(id int) (string, error) {
+	var apiKey sql.NullString
+	err := DB.QueryRow(
+		"SELECT openrouter_api_key FROM users WHERE id = ?",
+		id,
+	).Scan(&apiKey)
+	if err != nil {
+		return "", err
+	}
+	if !apiKey.Valid {
+		return "", nil
+	}
+	return apiKey.String, nil
+}
+
 // CheckPasswordHash compares a password with a hash
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))

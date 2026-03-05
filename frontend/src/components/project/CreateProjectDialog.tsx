@@ -71,15 +71,15 @@ export default function CreateProjectDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create Project</DialogTitle>
+      <DialogContent className="p-0 gap-0! bg-card">
+        <DialogHeader className="border-b border-border p-4 mb-0! gap-0">
+          <DialogTitle className="text-xl font-medium">Create Project</DialogTitle>
           <DialogDescription>
             Create a new project to organize your databases. Projects help you
             group related databases together.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="p-4">
           <div className="grid gap-4 py-4">
             {error && (
               <div className="p-3 text-sm bg-red-500/10 border border-red-500/20 text-red-400 rounded-md">
@@ -87,7 +87,9 @@ export default function CreateProjectDialog({
               </div>
             )}
             <div className="grid gap-2">
-              <Label htmlFor="name">Project Name</Label>
+              <Label htmlFor="name" className="text-neutral-400 uppercase tracking-wider text-xs font-medium">
+                Project Name
+              </Label>
               <Input
                 id="name"
                 placeholder="my-project"
@@ -97,7 +99,9 @@ export default function CreateProjectDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="description">Description (optional)</Label>
+              <Label htmlFor="description" className="text-neutral-400 uppercase tracking-wider text-xs font-medium">
+                Description (optional)
+              </Label>
               <Input
                 id="description"
                 placeholder="A brief description of this project"

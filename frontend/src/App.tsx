@@ -81,6 +81,7 @@ function App() {
                                 path="/db/:id/monitoring"
                                 element={<Monitoring />}
                               />
+                              <Route path="/monitoring" element={<Monitoring />} />
                               <Route
                                 path="/db/:id/sql-editor"
                                 element={<SQLEditor />}
@@ -94,10 +95,12 @@ function App() {
                                 path="/db/:id/containers"
                                 element={<Containers />}
                               />
+                              <Route path="/containers" element={<Containers />} />
                               <Route
                                 path="/db/:id/web-server"
                                 element={<WebServer />}
                               />
+                              <Route path="/web-server" element={<WebServer />} />
                               <Route
                                 path="/db/:id/backup"
                                 element={<Backup />}
@@ -106,6 +109,7 @@ function App() {
                                 path="/db/:id/security"
                                 element={<Security />}
                               />
+                              <Route path="/security" element={<Security />} />
                               <Route path="/users" element={<Users />} />
                               <Route path="/settings/profile" element={<Profile />} />
                             </Routes>

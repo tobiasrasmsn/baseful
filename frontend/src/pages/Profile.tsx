@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { authFetch } from "../lib/api";
 import { Facehash } from "facehash";
@@ -17,9 +17,35 @@ export default function Profile() {
     const [profileLoading, setProfileLoading] = useState(false);
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [avatarLoading, setAvatarLoading] = useState(false);
+    const [openRouterApiKey, setOpenRouterApiKey] = useState("");
+    const [openRouterConfigured, setOpenRouterConfigured] = useState(false);
+    const [openRouterMaskedKey, setOpenRouterMaskedKey] = useState("");
+    const [openRouterLoading, setOpenRouterLoading] = useState(false);
+    const [openRouterSaving, setOpenRouterSaving] = useState(false);
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const loadOpenRouterStatus = async () => {
+            if (!token) return;
+            setOpenRouterLoading(true);
+            try {
+                const res = await authFetch("/api/auth/openrouter-key", token, {}, logout);
+                if (!res.ok) {
+                    throw new Error("Failed to load OpenRouter key status");
+                }
+                const data = await res.json();
+                setOpenRouterConfigured(Boolean(data.configured));
+                setOpenRouterMaskedKey(data.maskedKey || "");
+            } catch {
+                // Keep the profile usable even if this fails.
+            } finally {
+                setOpenRouterLoading(false);
+            }
+        };
+        loadOpenRouterStatus();
+    }, [token, logout]);
 
     const handleUpdateProfile = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -115,6 +141,43 @@ export default function Profile() {
         } finally {
             setAvatarLoading(false);
         }
+    };
+
+    const saveOpenRouterKey = async (apiKeyValue: string) => {
+        if (!token) return;
+        setOpenRouterSaving(true);
+        setMessage(null);
+        try {
+            const res = await authFetch("/api/auth/openrouter-key", token, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ apiKey: apiKeyValue.trim() }),
+            }, logout);
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to save OpenRouter key");
+            }
+
+            setOpenRouterConfigured(Boolean(data.configured));
+            setOpenRouterMaskedKey(data.maskedKey || "");
+            setOpenRouterApiKey("");
+            setMessage({
+                type: "success",
+                text: data.configured
+                    ? "OpenRouter API key saved"
+                    : "OpenRouter API key removed",
+            });
+        } catch (err: any) {
+            setMessage({ type: "error", text: err.message });
+        } finally {
+            setOpenRouterSaving(false);
+        }
+    };
+
+    const handleSaveOpenRouterKey = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await saveOpenRouterKey(openRouterApiKey);
     };
 
     return (
@@ -286,6 +349,56 @@ export default function Profile() {
                             >
                                 {passwordLoading ? "Updating..." : "Update Password"}
                             </button>
+                        </form>
+                    </section>
+
+                    <section className="bg-card border border-border rounded-xl p-6 shadow-sm">
+                        <div className="flex items-center gap-2 mb-6 text-foreground font-semibold">
+                            <Lock size={18} weight="bold" className="text-primary" />
+                            <h2>AI Assistant (OpenRouter)</h2>
+                        </div>
+                        <form onSubmit={handleSaveOpenRouterKey} className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">OpenRouter API Key</label>
+                                <input
+                                    type="password"
+                                    value={openRouterApiKey}
+                                    onChange={(e) => setOpenRouterApiKey(e.target.value)}
+                                    className="w-full h-10 px-3 bg-muted/30 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-shadow"
+                                    placeholder={openRouterConfigured ? `Configured: ${openRouterMaskedKey}` : "sk-or-v1-..."}
+                                    autoComplete="off"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    {openRouterLoading
+                                        ? "Checking key status..."
+                                        : openRouterConfigured
+                                            ? "A key is currently configured for your account."
+                                            : "No key configured yet."}
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="submit"
+                                    disabled={openRouterSaving}
+                                    className="mt-1 px-4 h-10 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
+                                >
+                                    {openRouterSaving ? "Saving..." : "Save Key"}
+                                </button>
+                                {openRouterConfigured && (
+                                    <button
+                                        type="button"
+                                        disabled={openRouterSaving}
+                                        onClick={async () => {
+                                            setOpenRouterApiKey("");
+                                            await saveOpenRouterKey("");
+                                        }}
+                                        className="mt-1 px-4 h-10 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                                    >
+                                        Remove Key
+                                    </button>
+                                )}
+                            </div>
                         </form>
                     </section>
                 </div>

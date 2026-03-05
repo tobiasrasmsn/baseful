@@ -111,6 +111,22 @@ export default function Sidebar() {
     return text;
   };
 
+  const getDatabaseSwitchPath = (nextDatabaseId: number) => {
+    const pathParts = location.pathname.split("/");
+    const dbIdIndex = pathParts.indexOf("db");
+
+    if (dbIdIndex !== -1 && pathParts[dbIdIndex + 1]) {
+      pathParts[dbIdIndex + 1] = String(nextDatabaseId);
+      return `${pathParts.join("/")}${location.search}${location.hash}`;
+    }
+
+    if (location.pathname !== "/") {
+      return `${location.pathname}${location.search}${location.hash}`;
+    }
+
+    return `/db/${nextDatabaseId}/dashboard`;
+  };
+
   const handleUpdate = async () => {
     if (
       !confirm(
@@ -177,7 +193,7 @@ export default function Sidebar() {
                             <li>
                               <Link
                                 key={db.id}
-                                to={`/db/${db.id}/dashboard`}
+                                to={getDatabaseSwitchPath(db.id)}
                                 onClick={() => setSelectorOpen(false)}
                                 className={`flex flex-row items-center gap-2 p-2 rounded-md transition-colors ${
                                   selectedDatabase?.id === db.id
@@ -390,116 +406,65 @@ export default function Sidebar() {
           </div>
         )}
 
-        {selectedDatabase && (
-          <div>
-            {/* Actions */}
-            <h2 className="text-xs font-medium text-neutral-400 mb-3 px-2.5">
-              SERVER
-            </h2>
-            <ul className="flex flex-col gap-1">
-              <li
-                className={`py-1.5 px-2.5 rounded-md ${
-                  location.pathname ===
-                  (selectedDatabase
-                    ? `/db/${selectedDatabase.id}/monitoring`
-                    : "/")
-                    ? "bg-muted/50"
-                    : ""
-                }`}
+        <div>
+          <h2 className="text-xs font-medium text-neutral-400 mb-3 px-2.5">
+            SERVER
+          </h2>
+          <ul className="flex flex-col gap-1">
+            <li
+              className={`py-1.5 px-2.5 rounded-md ${
+                location.pathname === "/monitoring" ? "bg-muted/50" : ""
+              }`}
+            >
+              <Link
+                to="/monitoring"
+                className="text-neutral-100 text-sm flex flex-row items-center gap-2"
               >
-                <Link
-                  to={
-                    selectedDatabase
-                      ? `/db/${selectedDatabase.id}/monitoring`
-                      : "/"
-                  }
-                  className="text-neutral-100 text-sm flex flex-row items-center gap-2"
-                >
-                  <GraphIcon
-                    size={18}
-                    weight="bold"
-                    className="text-neutral-400"
-                  />
-                  <span>Monitoring</span>
-                </Link>
-              </li>
-              <li
-                className={`py-1.5 px-2.5 rounded-md ${
-                  location.pathname ===
-                  (selectedDatabase
-                    ? `/db/${selectedDatabase.id}/containers`
-                    : "/")
-                    ? "bg-muted/50"
-                    : ""
-                }`}
+                <GraphIcon size={18} weight="bold" className="text-neutral-400" />
+                <span>Monitoring</span>
+              </Link>
+            </li>
+            <li
+              className={`py-1.5 px-2.5 rounded-md ${
+                location.pathname === "/containers" ? "bg-muted/50" : ""
+              }`}
+            >
+              <Link
+                to="/containers"
+                className="text-neutral-100 text-sm flex flex-row items-center gap-2"
               >
-                <Link
-                  to={
-                    selectedDatabase
-                      ? `/db/${selectedDatabase.id}/containers`
-                      : "/"
-                  }
-                  className="text-neutral-100 text-sm flex flex-row items-center gap-2"
-                >
-                  <CubeIcon
-                    size={18}
-                    weight="bold"
-                    className="text-neutral-400"
-                  />
-                  <span>Containers</span>
-                </Link>
-              </li>
-              <li
-                className={`py-1.5 px-2.5 rounded-md ${
-                  location.pathname ===
-                  (selectedDatabase
-                    ? `/db/${selectedDatabase.id}/web-server`
-                    : "/")
-                    ? "bg-muted/50"
-                    : ""
-                }`}
+                <CubeIcon size={18} weight="bold" className="text-neutral-400" />
+                <span>Containers</span>
+              </Link>
+            </li>
+            <li
+              className={`py-1.5 px-2.5 rounded-md ${
+                location.pathname === "/web-server" ? "bg-muted/50" : ""
+              }`}
+            >
+              <Link
+                to="/web-server"
+                className="text-neutral-100 text-sm flex flex-row items-center gap-2"
               >
-                <Link
-                  to={
-                    selectedDatabase
-                      ? `/db/${selectedDatabase.id}/web-server`
-                      : "/"
-                  }
-                  className="text-neutral-100 text-sm flex flex-row items-center gap-2"
-                >
-                  <Globe size={18} weight="bold" className="text-neutral-400" />
-                  <span>Web Server</span>
-                </Link>
-              </li>
-              <li
-                className={`py-1.5 px-2.5 rounded-md ${
-                  location.pathname ===
-                  (selectedDatabase
-                    ? `/db/${selectedDatabase.id}/security`
-                    : "/")
-                    ? "bg-muted/50"
-                    : ""
-                }`}
+                <Globe size={18} weight="bold" className="text-neutral-400" />
+                <span>Web Server</span>
+              </Link>
+            </li>
+            <li
+              className={`py-1.5 px-2.5 rounded-md ${
+                location.pathname === "/security" ? "bg-muted/50" : ""
+              }`}
+            >
+              <Link
+                to="/security"
+                className="text-neutral-100 text-sm flex flex-row items-center gap-2"
               >
-                <Link
-                  to={
-                    selectedDatabase
-                      ? `/db/${selectedDatabase.id}/security`
-                      : "/"
-                  }
-                  className="text-neutral-100 text-sm flex flex-row items-center gap-2"
-                >
-                  <LockIcon
-                    size={18}
-                    weight="bold"
-                    className="text-neutral-400"
-                  />
-                  <span>Security</span>
-                </Link>
-              </li>
-            </ul>
-          </div>
-        )}
+                <LockIcon size={18} weight="bold" className="text-neutral-400" />
+                <span>Security</span>
+              </Link>
+            </li>
+          </ul>
+        </div>
 
         {user?.isAdmin && (
           <div>

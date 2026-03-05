@@ -2,6 +2,7 @@
 
 # Baseful Installation Script
 # Usage: curl -sSL https://raw.githubusercontent.com/tobiasrasmsn/baseful/main/install.sh | bash
+# Update mode: ... | bash -s -- update
 # Works for both root and non-root users (non-root requires sudo access).
 
 set -e
@@ -9,6 +10,12 @@ set -e
 # --- Configuration ---
 INSTALL_DIR="/opt/baseful"
 GITHUB_REPO="https://github.com/tobiasrasmsn/baseful.git"
+
+# --- Mode flags ---
+UPDATE_MODE=0
+if [ "${1:-}" = "update" ] || [ "${1:-}" = "--update" ] || [ "${1:-}" = "-u" ]; then
+    UPDATE_MODE=1
+fi
 
 # --- Privilege helper: root runs directly, non-root uses sudo ---
 if [ "$(id -u)" -eq 0 ]; then
@@ -54,19 +61,25 @@ echo "------------------------------------------------"
 # Pre-flight: Ask about security hardening
 # ============================================================
 printf "\n"
-info "Security hardening installs UFW, Fail2ban, and unattended upgrades."
-printf "Apply security hardening? (yes/no) [yes]: "
-read -r HARDEN < /dev/tty
-# Default to yes if empty
-if [ -z "$HARDEN" ]; then
-    HARDEN="yes"
-fi
-if [ "$HARDEN" = "yes" ] || [ "$HARDEN" = "y" ]; then
-    DO_HARDEN=1
-    success "✓ Security hardening will be applied."
-else
+if [ "$UPDATE_MODE" -eq 1 ]; then
     DO_HARDEN=0
-    warn "Skipping security hardening."
+    info "Update mode enabled (security hardening prompt skipped)."
+    warn "Security hardening will be skipped in update mode."
+else
+    info "Security hardening installs UFW, Fail2ban, and unattended upgrades."
+    printf "Apply security hardening? (yes/no) [yes]: "
+    read -r HARDEN < /dev/tty
+    # Default to yes if empty
+    if [ -z "$HARDEN" ]; then
+        HARDEN="yes"
+    fi
+    if [ "$HARDEN" = "yes" ] || [ "$HARDEN" = "y" ]; then
+        DO_HARDEN=1
+        success "✓ Security hardening will be applied."
+    else
+        DO_HARDEN=0
+        warn "Skipping security hardening."
+    fi
 fi
 printf "\n"
 
